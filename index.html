@@ -121,7 +121,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">50</span>
+          <span class="site-state-item-count">54</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
@@ -149,6 +149,749 @@
     </div>
 
     <div class="main-inner index posts-expand">
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/06/08/Datax-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="刘冰鉴">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="村里最好的博客">
+      <meta itemprop="description" content="Res severa est verum gaudium.">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | 村里最好的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022/06/08/Datax-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/" class="post-title-link" itemprop="url">Datax 源码阅读</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+
+      <time title="Created: 2022-06-08 20:32:40" itemprop="dateCreated datePublished" datetime="2022-06-08T20:32:40+08:00">2022-06-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">Edited on</span>
+      <time title="Modified: 2023-12-23 20:28:26" itemprop="dateModified" datetime="2023-12-23T20:28:26+08:00">2023-12-23</time>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <h2 id="主要概念解释"><a href="#主要概念解释" class="headerlink" title="主要概念解释"></a>主要概念解释</h2><ul>
+<li>Reader：数据采集模块，负责数据读取，将数据发送给 Channel。</li>
+<li>Writer：数据写入模块，负责不断读取 Channel 的数据，并将 Channel 的数据写入到目的端。</li>
+<li>Channel：通过 <code>pushX</code> 与 <code>pullX</code> 接口提供 Plugins 数据通道能力，同时统一统计、限速能力。</li>
+<li>RecordSender：基于 Channel 封装的接口，用于 Reader 将 Record 传递到框架</li>
+<li>RecordReceiver：基于 Channel 封装的接口，用于 Writer 从框架获取 Recrod</li>
+<li>Job：单个数据同步的作业，DataX接受到一个Job之后，将启动一个进程来完成整个作业同步过程。DataX Job 模块是单个作业的中枢管理节点，承担了数据清理、子任务切分(将单一作业计算转化为多个子 Task)、TaskGroup 管理等功能。</li>
+<li>Task：Task 是 DataX 作业的最小单元，每一个 Task 都会负责一部分数据的同步工作。Task 由 TaskGroup 进行管理。Task 会固定启动 Reader -&gt; Channel -&gt; Writer 的线程来进行同步工作。</li>
+<li>TaskGroup：管理一组 Task 的运行。</li>
+</ul>
+<h2 id="线程模型"><a href="#线程模型" class="headerlink" title="线程模型"></a>线程模型</h2><p>在 DataX 中容易见到 <code>Job</code>、<code>TaskGroup</code> 等实际概念是以 <code>Container</code> 包装成一个个能 <code>start</code> 的实例。<br>而与线程配合的则是以 <code>Runner</code>封装，包括 <code>TaskGroupContainerRunner</code>、<code>ReaderRunner</code>、<code>WriterRunner</code></p>
+<p>其线程模型如下：<br><img src="/images/datax/image_1.png" alt="image.png"><br>从运行模型来说</p>
+<ul>
+<li><code>Job</code>持有多个 <code>TaskGroup</code> 并通过 <code>FixedThreadPool(size)</code>的形式运行其中的多个 <code>Task</code></li>
+<li>每个 <code>Task</code> 将 <code>Reader</code> 与 <code>Writer</code> 封装的 <code>Thread</code>运行起来，需要注意的是同时运行的数量不允许超过 <code>Channel</code>的数量，也就是说虽然概念上 <code>TaskGroup</code> 封装了多个 <code>Task</code> 并以 <code>Task</code>形式传输数据，但实际上 <code>Task</code> 仅是一个内部的数据结构，实际运行的线程是 <code>ReaderThread</code> 与 <code>WriterThread</code>，二者依赖自己的接口向 <code>Channel</code>传输数据。</li>
+</ul>
+<h2 id="Plugin-设计"><a href="#Plugin-设计" class="headerlink" title="Plugin 设计"></a>Plugin 设计</h2><p>在 DataX 设计框架中，Plugin 实现者只需要做两件事</p>
+<ul>
+<li>如何切分任务</li>
+<li>切分的任务如何读数据</li>
+</ul>
+<p>这也映射到需要实现 <code>Reader</code> 与 <code>Writer</code> 的两个类</p>
+<ul>
+<li><p><code>Reader.Job</code>&#x2F; <code>Writer.Job</code>：关注根据配置切分任务，后续每个配置会经由框架拆分成等量的 <code>Task</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">class</span> <span class="title class_">Job</span> <span class="keyword">extends</span> <span class="title class_">Reader</span>.Job &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">init</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="comment">// 此时可以通过super.getPluginJobConf()获取与本插件相关的配置,</span></span><br><span class="line">        <span class="comment">// 这里主要是初始化配置项，比如 OB 会初始化是 mysql / oracle 模式</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">prepare</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="comment">// 预处理，比如清空目标表等操作</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> List&lt;Configuration&gt; <span class="title function_">split</span><span class="params">(<span class="type">int</span> adviceNumber)</span> &#123;</span><br><span class="line">        <span class="comment">// 拆分Task。参数 adviceNumber 框架建议的拆分数，</span></span><br><span class="line">        <span class="comment">// 一般是运行时所配置的并发度。值返回的是Task的配置列表。</span></span><br><span class="line">        <span class="comment">// 这里拆分逻辑还是相当有讲究的。DataX 提供的通用 split 逻辑</span></span><br><span class="line">        <span class="comment">// 实际仅查询出来最大最小值，然后根据最大最小值之间的差距直接计算切片逻辑</span></span><br><span class="line">        <span class="comment">// 优势是切片逻辑简单，切片时候不需要查询数据</span></span><br><span class="line">        <span class="comment">// 缺点也很明显，数据可能不均衡，受数据类型影响非常大</span></span><br><span class="line">        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">post</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="comment">// 全局的后置工作，比如 mysqlwriter 同步完影子表后的 rename 操作。</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">destroy</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="comment">// 销毁资源</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><code>Reader.Task</code>&#x2F; <code>Writer.Task</code>：关注获取配置之后怎么读写数据</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">class</span> <span class="title class_">Task</span> <span class="keyword">extends</span> <span class="title class_">Reader</span>.Task &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">init</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="comment">// Task 对象的初始化。</span></span><br><span class="line">        <span class="comment">// 此时可以通过 super.getPluginJobConf() 获取与本Task相关的配置。</span></span><br><span class="line">        <span class="comment">// 这里的配置是 Job 的 split 方法返回的配置列表中的其中一个。</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">prepare</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="comment">// 局部的准备工作</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">startRead</span><span class="params">(RecordSender recordSender)</span> &#123;</span><br><span class="line">        <span class="comment">// 对于 reader 而言是读取数据然后通过 `RecordSender#sendToWriter` 将数据传输到框架中</span></span><br><span class="line">        <span class="comment">// 对于 writer 而言是通过 `RecordReceiver#getFromReader` 获取到数据然后写入目的端</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">post</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="comment">// 局部的后置工作。</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">destroy</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="comment">// Task象自身的销毁工作。</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ul>
+<p>以及在做插件化的时候有个及其重要的事项，如何解决不同版本相同 Class 的兼容问题</p>
+<ul>
+<li>比如我想从 MySQL5.7 迁移到 MySQL8.0、HBase0.94 迁移到 HBase2.x 等等这样源端和目的端可能是用了同样 package 下不同 version 的 dependency 怎么处理。</li>
+<li>源端和目的端由于是不同人开发的，引入了比如 guava-17 和 guava-30 的不同版本是不是会导致程序运行过程中出现 <code>NoSuchMethodError</code>等异常</li>
+</ul>
+<p>这时候就需要知道，JVM 中是如何识别 Class 的了，也就是可能面试中常会出现的『双亲委派机制』，我也不知道这个词从哪里派生出来的。只是说 JVM 识别一个 class 会使用到 <code>ClassLoader#loadClass</code>方法，而其中识别这个 <code>ClassName</code>是否被加载过。</p>
+<ul>
+<li>当前 <code>ClassLoader</code> 之前已经加载过这个 <code>Class</code> 了</li>
+<li>如果没有加载过，委托父类去完成加载</li>
+<li>如果不存在父类，则委托 <code>BoostrapClassLoader</code> 完成加载</li>
+<li>若父类加载器无法完成类的加载，当前类加载器才会去尝试加载该类。</li>
+</ul>
+<p>也就是说只要能在证明自己已经加载过这些类，就不会存在父类去加载该类的情况，即如果存在两个都叫做 <code>com.A</code>的类文件，如果存在两个 <code>ClassLoader</code>已经认识到自己加载过其中某一个类，实际在一个 JVM 中两个类都分别被加载了（不同版本的共存），只需要在使用该类的时候是从正确的 <code>ClassLoader#loadClass</code>获取到该类即可。即打破了双亲委派。<br><img src="/images/datax/image_2.png" alt="image.png"></p>
+<p>在 <code>DataX</code> 中自己实现了 <code>JarLoader</code> 继承 <code>URLClassLoader</code>通过传入构造器中的 plugin.jar 路径来帮助 <code>findClass</code> 方法能找到 plugin.jar。此时从类加载关系来看 <code>JarLoader</code> 与 <code>ApplicationClassLoader</code>是平行关系，如果需要使用到 Plugin 接口通过在执行的线程中自定义当前类加载器 <code>Thread.currentThread().setContextClassLoader</code>。<br>可以在 <code>JobContainer</code> 中看到在执行每个 <code>Plugin</code> 接口操作前都会替换线程类加载器。并且在 <code>WriterThread</code> 与 <code>ReaderThread</code> 创建的时候也调用了 <code>setContextClassLoader</code> 方法。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="title function_">TaskExecutor</span><span class="params">(Configuration taskConf, <span class="type">int</span> attemptCount)</span> &#123;</span><br><span class="line">    ...</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 生成writerThread</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    writerRunner = (WriterRunner) generateRunner(PluginType.WRITER);</span><br><span class="line">    <span class="built_in">this</span>.writerThread = <span class="keyword">new</span> <span class="title class_">Thread</span>(writerRunner,</span><br><span class="line">            String.format(<span class="string">&quot;%d-%d-%d-writer&quot;</span>,</span><br><span class="line">                    jobId, taskGroupId, <span class="built_in">this</span>.taskId));</span><br><span class="line">    <span class="comment">//通过设置thread的contextClassLoader，即可实现同步和主程序不通的加载器</span></span><br><span class="line">    <span class="built_in">this</span>.writerThread.setContextClassLoader(LoadUtil.getJarLoader(</span><br><span class="line">            PluginType.WRITER, <span class="built_in">this</span>.taskConfig.getString(</span><br><span class="line">                    CoreConstant.JOB_WRITER_NAME)));</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 生成readerThread</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    readerRunner = (ReaderRunner) generateRunner(PluginType.READER,transformerInfoExecs);</span><br><span class="line">    <span class="built_in">this</span>.readerThread = <span class="keyword">new</span> <span class="title class_">Thread</span>(readerRunner,</span><br><span class="line">            String.format(<span class="string">&quot;%d-%d-%d-reader&quot;</span>,</span><br><span class="line">                    jobId, taskGroupId, <span class="built_in">this</span>.taskId));</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 通过设置thread的contextClassLoader，即可实现同步和主程序不通的加载器</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="built_in">this</span>.readerThread.setContextClassLoader(LoadUtil.getJarLoader(</span><br><span class="line">            PluginType.READER, <span class="built_in">this</span>.taskConfig.getString(</span><br><span class="line">                    CoreConstant.JOB_READER_NAME)));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>为了配合 DataX 的 Plugin 框架层做了较大的改动，原则上框架和 Plugin 不会存在变量之间的互相传递，Record 的传递也是以框架通过 <code>Class.newInstance()</code>生成之后填充为准，保证不会出现在变量传递之间出现 Class 不匹配问题（编译不报错运行出错）。</p>
+<h2 id="消息流通"><a href="#消息流通" class="headerlink" title="消息流通"></a>消息流通</h2><p>消息是通过 <code>Reader</code> 产生通过 <code>Channel</code> 流向 <code>Writer</code>，而消息流通并不仅限于此，而是包含了 <code>Reader</code> 如何产生消息，框架 <code>Record</code> 如何设计以解决不同 Plugin 的数据差异，<code>Writer</code> 又如何将这些消息写入到目的端。<br><img src="/images/datax/image_3.png" alt="image.png"></p>
+<ul>
+<li>Reader 产生消息通过接口将 Record 存入 Channel 中，Channel 的存在同时可以作为控制内存、控制全局流量的通道，在 Memory 中是以朴素有用的阻塞队列实现的</li>
+<li>Writer 主动拉取消息让写入攒批频率控制权交给 Writer，方便实现目的端流量监控能力。</li>
+</ul>
+<p>要让所有 Plugin 编写简单，统一抽象所有数据源的 <code>Record</code> 是最为重要的工作。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">interface</span> <span class="title class_">Record</span> &#123;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">addColumn</span><span class="params">(Column column)</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">setColumn</span><span class="params">(<span class="type">int</span> i, <span class="keyword">final</span> Column column)</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">public</span> Column <span class="title function_">getColumn</span><span class="params">(<span class="type">int</span> i)</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">public</span> String <span class="title function_">toString</span><span class="params">()</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">public</span> <span class="type">int</span> <span class="title function_">getColumnNumber</span><span class="params">()</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">public</span> <span class="type">int</span> <span class="title function_">getByteSize</span><span class="params">()</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">public</span> <span class="type">int</span> <span class="title function_">getMemorySize</span><span class="params">()</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">setMeta</span><span class="params">(Map&lt;String, String&gt; meta)</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">public</span> Map&lt;String, String&gt; <span class="title function_">getMeta</span><span class="params">()</span>;</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">enum</span> <span class="title class_">Type</span> &#123;</span><br><span class="line">    BAD, NULL, INT, LONG, DOUBLE, STRING, BOOL, DATE, BYTES</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<h2 id=""><a href="#" class="headerlink" title=""></a><img src="/images/datax/image_4.png" alt="image.png"></h2><p>实际实现对应<br><code>BoolColumn -&gt; Boolean</code><br><code>BytesColumn -&gt; byte[]</code><br><code>DateColumn -&gt; Date</code><br><code>DirtyColumn -&gt; 不实现</code><br><code>DoubleColumn -&gt; Double</code><br><code>Long -&gt; Long</code><br><code>StringColumn -&gt; String</code></p>
+<p>在当前 DataX 的设计中必然会因为很多无法用原生类型表示的数据需要 String 来补位。</p>
+<h2 id="其他"><a href="#其他" class="headerlink" title="其他"></a>其他</h2><h3 id="统计信息"><a href="#统计信息" class="headerlink" title="统计信息"></a>统计信息</h3><p><code>Communication</code>类是 job &#x2F; taskGroup &#x2F; task 信息交互，汇报聚集的类。</p>
+<ul>
+<li>计数器，比如读取的字节速度，写入成功的数据条数</li>
+<li>统计的时间点 字符串类型的消息</li>
+<li>执行时的异常</li>
+<li>执行的状态， 比如成功或失败</li>
+</ul>
+<h3 id="分布式架构"><a href="#分布式架构" class="headerlink" title="分布式架构"></a>分布式架构</h3><p>DataX 是允许以 TaskGroup 的方式单独运行，而不是仅允许以 Job 的方式全局允许。<br>这个前提就给了上层实现分布式架构的可行性，当上游调度确定分片任务之后，生成分片配置，完全可以让不同机器&#x2F;进程运行不同的 Task，在资源上突破单进程带来的瓶颈。</p>
+<h2 id="性能压测与性能指标统计"><a href="#性能压测与性能指标统计" class="headerlink" title="性能压测与性能指标统计"></a>性能压测与性能指标统计</h2><p>TODO</p>
+
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/04/18/Arthas-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="刘冰鉴">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="村里最好的博客">
+      <meta itemprop="description" content="Res severa est verum gaudium.">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | 村里最好的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022/04/18/Arthas-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/" class="post-title-link" itemprop="url">Arthas 源码阅读</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+
+      <time title="Created: 2022-04-18 23:14:54" itemprop="dateCreated datePublished" datetime="2022-04-18T23:14:54+08:00">2022-04-18</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">Edited on</span>
+      <time title="Modified: 2023-12-23 20:26:29" itemprop="dateModified" datetime="2023-12-23T20:26:29+08:00">2023-12-23</time>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <h2 id="结构"><a href="#结构" class="headerlink" title="结构"></a>结构</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">├── agent							[ClassLoader/代理启动]</span><br><span class="line">├── arthas-agent-attach				[Agent Attach?]</span><br><span class="line">├── arthas-spring-boot-starter		[针对 spring boot-<span class="number">2</span> 提供的自动集成技能]</span><br><span class="line">├── arthas-vmtool					[JVM 工具模块]</span><br><span class="line">├── <span class="keyword">async</span>-profiler					[profiler 的 so 文件]</span><br><span class="line">├── bin								[shell 脚本]</span><br><span class="line">├── boot							[启动模块]</span><br><span class="line">├── client							[client 模块]</span><br><span class="line">├── common							[通用模块]</span><br><span class="line">├── core							[核心功能模块]</span><br><span class="line">├── demo							[demo 展示]</span><br><span class="line">├── lib								[arthas jni]</span><br><span class="line">├── math-game						[demo]</span><br><span class="line">├── memorycompiler					[动态编译模块]</span><br><span class="line">├── packaging						[打包专用]</span><br><span class="line">├── site							[arthas 官网信息]</span><br><span class="line">├── spy								[定义 <span class="title function_ invoke__">SPI</span>(方法执行前后插入点)]</span><br><span class="line">├── testcase						[测试 case]</span><br><span class="line">├── tunnel-client					[tunnel-client/server 均是为了提供管理多个 arthas 的能力]</span><br><span class="line">├── tunnel-common</span><br><span class="line">├── tunnel-server</span><br><span class="line">└── tutorials</span><br></pre></td></tr></table></figure>
+<h2 id="Attach-背景知识"><a href="#Attach-背景知识" class="headerlink" title="Attach 背景知识"></a>Attach 背景知识</h2><p>参考：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.baeldung.com/java-instrumentation">Guide to Java Instrumentation</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.oracle.com/javase/8/docs/technotes/guides/attach/">Attach API</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.oracle.com/en/java/javase/11/docs/api/java.instrument/java/lang/instrument/Instrumentation.html">Instrumentation</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.oracle.com/javase/7/docs/jdk/api/attach/spec/com/sun/tools/attach/VirtualMachine.html">VirtualMachine</a></li>
+</ul>
+<p>使用 Bootstrap <code>java -jar arthas-boot.jar &lt;pid&gt;</code> 逻辑<br><img src="/images/arthas/image_1.png" alt="image.png"><br>可以看到主要逻辑在 <code>java -jar arthas-core.jar</code> 中<br><img src="/images/arthas/image_2.png" alt="image.png"></p>
+<p>现在主要逻辑转向了 <code>arthas-agent</code> 了，下面是它的 main 流程<br><img src="/images/arthas/image_3.png" alt="image.png"><br>现在逻辑就转到了 <code>ArthasBootstrap</code> 获取到 <code>Instrumentation</code> 之后的初始化构建逻辑中了<br><img src="/images/arthas/image_4.png" alt="image.png"></p>
+<p>自此，在启动了 Server 并准备完成 ThreadPool 之后就算启动成功了。<br>从 Server 中我们可以简单猜一下，命令是通过 TelnetClient 发送到指定 Server 执行并通过注册的 CommandResolver 来进行解析执行。</p>
+<h2 id="怎么执行-Shell-指令的"><a href="#怎么执行-Shell-指令的" class="headerlink" title="怎么执行 Shell 指令的"></a>怎么执行 Shell 指令的</h2><p>以 <code>thread</code> 命令来举例：<a target="_blank" rel="noopener" href="https://arthas.aliyun.com/doc/thread.html">https://arthas.aliyun.com/doc/thread.html</a><br><code>Bootstrap</code> 在最后启动了 <code>TelnetConsole</code>  的 main 方法，此时 <code>TelnetConsole</code> 就会在中断阻塞等待用户输入命令。(参考 <code>TelnetConsole.process</code>)</p>
+<p><img src="/images/arthas/image_5.png" alt="image.png"></p>
+<p>这样我们所有的输入最终都会被 <code>ShellServer</code> 接收并解析。理论会存在三类 <code>TermServer</code> 来接收用户下达的指令。<br>分别是常用的 <code>HttpTelnetTermServer</code> &#x2F;  HTTP 接口 <code>HttpTermServer</code> 和  TunnelServer 的 <code>HttpTermServer</code>，其内部都是使用 Netty 实现的，而处理的 Handler 则是 <code>TermServerTermHandler</code></p>
+<p><img src="/images/arthas/image_6.png" alt="image.png"><br>当请求到来时候</p>
+<p><img src="/images/arthas/image_7.png" alt="image.png"><br>另外 <code>ShellImpl.readline</code> 中的 <code>CommandManagerCompletionHandler</code> 是用于捕获 <code>Ctrl-I</code> keyEvent 来做命令补全的，这里的补全实际就是 <code>Command</code> 接口的 <code>complete</code> 接口。</p>
+<p>这里从 Job - Process - Command 也值得说道<br><img src="/images/arthas/image_8.png" alt="image.png"></p>
+<p>这样我们大体知道，Arthas 在启动的时候</p>
+<ol>
+<li>将所有 Command 注册到 Server 中</li>
+<li>启动 Client 发送请求到 Server 中，Server 解析，并通过 <code>ProcessImpl</code> 来执行对应的 <code>Command</code></li>
+<li>Command 想代理的实际 AnnotatedCommand 中执行命令</li>
+</ol>
+<p>当然 <code>Process</code> 的执行过程远没有这么简单，中间涉及到命令的状态维护，会话维护等信息，这里就不展开讨论了。</p>
+<p>这样我们看 <code>thread</code> 的命令实现实际就局限到 <code>ThreadCommand</code> 中的 <code>process</code> 方法了，能明显看到处理逻辑实际是</p>
+<ul>
+<li>获取所有 thread 详情</li>
+<li>获取 pid 的 thread 详情</li>
+<li>获取 topNBusy 详情</li>
+<li>获取 blockingThread 详情</li>
+</ul>
+<p>获取的技术分别是</p>
+<ul>
+<li>通过 <code>CurrentThreadGroup</code>的 <code>getParten</code> 逐步往下获取所有线程，直接使用 <code>Thread</code> 的信息</li>
+<li>通过 <code>ThreadMXBean</code> 获取 Thread 的 CPU 详情、锁信息等</li>
+</ul>
+<h2 id="怎么获取-JVM-信息的"><a href="#怎么获取-JVM-信息的" class="headerlink" title="怎么获取 JVM 信息的"></a>怎么获取 JVM 信息的</h2><p>从 <code>JvmCommand</code> 中可以看到</p>
+<ul>
+<li>Jvm 基础信息通过 <code>RuntimeMXBean</code> 获取</li>
+<li>类加载信息通过 <code>ClassLoadingMXBean</code> 获取</li>
+<li>编译信息（编译次数）通过 <code>CompilationMXBean</code> 获取</li>
+<li>GC 信息通过 <code>GarbageCollectorMXBean</code> 获取</li>
+<li>内存信息通过 <code>MemoryMXBean</code> 获取</li>
+<li>操作系统信息通过 <code>OperatingSystemMXBean</code> 获取</li>
+<li>线程信息通过 <code>ThreadMXBean</code> 获取</li>
+</ul>
+<h2 id="Watch-接口如何实现的"><a href="#Watch-接口如何实现的" class="headerlink" title="Watch 接口如何实现的"></a>Watch 接口如何实现的</h2><p><code>WatchCommand extends EnhancerCommand</code> 其中的所有方法都会走一遍 <code>EnhancerCommand.process</code> 方法，其内部逻辑</p>
+<p><img src="/images/arthas/image_9.png" alt="image.png"></p>
+<p>Enhancer 的逻辑实际就是通过字节码增强类，将 <code>AdviceListener</code> 的逻辑套用到被 <code>Enhancer</code> 的类中</p>
+<h3 id="Enhance"><a href="#Enhance" class="headerlink" title="Enhance"></a>Enhance</h3><p><img src="/images/arthas/image_10.png" alt="image.png"></p>
+<h3 id="WatchAdviceListener"><a href="#WatchAdviceListener" class="headerlink" title="WatchAdviceListener"></a>WatchAdviceListener</h3><p>实际就是获取到了一个 <code>Advice</code> 对象可能获取到方法运行时刻的信息，该信息是由 AdviceListener 得到的信息拼装得到的</p>
+<h2 id="Profiler-逻辑"><a href="#Profiler-逻辑" class="headerlink" title="Profiler 逻辑"></a>Profiler 逻辑</h2><p><code>ProfilerCommand</code> 这个本身是使用了一个二进制工具来做的 profiler，这个没啥好说的，具体详见 <a target="_blank" rel="noopener" href="https://github.com/jvm-profiling-tools/async-profiler/tree/v1.8.1">https://github.com/jvm-profiling-tools/async-profiler/tree/v1.8.1</a></p>
+<h2 id="使用：能否通过指令操作动态控制指定进程"><a href="#使用：能否通过指令操作动态控制指定进程" class="headerlink" title="使用：能否通过指令操作动态控制指定进程"></a>使用：能否通过指令操作动态控制指定进程</h2><h3 id="方法一：指定命令"><a href="#方法一：指定命令" class="headerlink" title="方法一：指定命令"></a>方法一：指定命令</h3><p>从代码可知(我在文档中确实没看到)，我们可以指定 <code>--command</code> 来指定多条命令以达到效果，比如这样就自动退出<br><img src="/images/arthas/image_11.png" alt="image.png"><br>但是这类方法可能不适用(直接)于 profiler （或者类似需要在控制台等待（保持 attach）一定周期的命令）这个时候可能下面方法 2 更为合适</p>
+<h3 id="方法二：通过-HTTP-API"><a href="#方法二：通过-HTTP-API" class="headerlink" title="方法二：通过 HTTP API"></a>方法二：通过 HTTP API</h3><p>当然其他的 API（Arthas 同时还提供 Arthas Tunnel 来管理多个 Agent 能力） 也可以。<br>参考：<a target="_blank" rel="noopener" href="https://arthas.aliyun.com/doc/http-api.html">https://arthas.aliyun.com/doc/http-api.html</a></p>
+<ol>
+<li>可以考虑在一个 agent 请求内启动一个独有的 http port 然后 agent 一个 程序 </li>
+<li>使用 HTTP API 来进行会话交互(单次命令也可以) 并将结果返回</li>
+<li>销毁 agent （因为 attach 的时候会对字节码进行增强，只有 exit 的时候会 reset 字节码增强的逻辑）</li>
+</ol>
+<h2 id="相关组件学习"><a href="#相关组件学习" class="headerlink" title="相关组件学习"></a>相关组件学习</h2><h3 id="Termd-Demo-学习"><a href="#Termd-Demo-学习" class="headerlink" title="Termd Demo 学习"></a>Termd Demo 学习</h3><p><a target="_blank" rel="noopener" href="https://github.com/termd/termd">https://github.com/termd/termd</a></p>
+<h4 id="ReadLine"><a href="#ReadLine" class="headerlink" title="ReadLine"></a>ReadLine</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ReadLineExample</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">handle</span><span class="params">(TtyConnection conn)</span> &#123;</span><br><span class="line">        readline(</span><br><span class="line">            <span class="keyword">new</span> <span class="title class_">Readline</span>(Keymap.getDefault()).addFunctions(Function.loadDefaults()),</span><br><span class="line">            conn);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">readline</span><span class="params">(Readline readline, TtyConnection conn)</span> &#123;</span><br><span class="line">        readline.readline(conn, <span class="string">&quot;% &quot;</span>, line -&gt; &#123;</span><br><span class="line">            <span class="keyword">if</span> (line == <span class="literal">null</span>) &#123;</span><br><span class="line">                conn.write(<span class="string">&quot;Logout&quot;</span>).close();</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                conn.write(<span class="string">&quot;User entered &quot;</span> + line + <span class="string">&quot;\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">                <span class="comment">// Read line again</span></span><br><span class="line">                readline(readline, conn);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;, completion -&gt; &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="keyword">final</span> <span class="type">String</span> <span class="variable">line</span> <span class="operator">=</span> io.termd.core.util.Helper.fromCodePoints(completion.line());</span><br><span class="line">                System.out.println(line);</span><br><span class="line"><span class="comment">//                completion.end();</span></span><br><span class="line">                completion.suggest(Arrays.asList(</span><br><span class="line">                    <span class="keyword">new</span> <span class="title class_">int</span>[]&#123;<span class="string">&#x27;f&#x27;</span>, <span class="string">&#x27;o&#x27;</span>, <span class="string">&#x27;o&#x27;</span>, <span class="string">&#x27;a&#x27;</span>&#125;,</span><br><span class="line">                    <span class="keyword">new</span> <span class="title class_">int</span>[]&#123;<span class="string">&#x27;f&#x27;</span>, <span class="string">&#x27;o&#x27;</span>, <span class="string">&#x27;o&#x27;</span>, <span class="string">&#x27;b&#x27;</span>&#125;,</span><br><span class="line">                    <span class="keyword">new</span> <span class="title class_">int</span>[]&#123;<span class="string">&#x27;f&#x27;</span>, <span class="string">&#x27;o&#x27;</span>, <span class="string">&#x27;o&#x27;</span>, <span class="string">&#x27;c&#x27;</span>&#125;</span><br><span class="line">                ));</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Throwable t) &#123;</span><br><span class="line">                 t.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">        &#125;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> Exception &#123;</span><br><span class="line">        <span class="type">NettyTelnetTtyBootstrap</span> <span class="variable">bootstrap</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">NettyTelnetTtyBootstrap</span>().setOutBinary(<span class="literal">true</span>).setHost(<span class="string">&quot;localhost&quot;</span>).setPort(<span class="number">4000</span>);</span><br><span class="line">        bootstrap.start(ReadLineExample::handle).get(<span class="number">10</span>, TimeUnit.SECONDS);</span><br><span class="line">        System.out.println(<span class="string">&quot;Telnet server started on localhost:4000&quot;</span>);</span><br><span class="line">        TelnetReadlineExample.class.wait();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>对于 <code>Consumer&lt;Completion&gt; completionHandler</code> 的理解</p>
+<ol>
+<li>首先 <code>Completion</code> 是一个 KeyEvent 通过 SPI 注册到 Readline(<code>Function.loadDefaults</code>-&gt;<code>addFunction</code>) 中</li>
+<li>KeyEvent 的定义在 <code>io.termd.core.readline.Keys</code> 中定义了 <code>name</code> 与 <code>sequence</code> 及字节码的映射关系</li>
+<li>具体映射事件详见：<a target="_blank" rel="noopener" href="https://github.com/termd/termd/blob/58dc750ce989bf5297323f5e021383552f3fab51/src/main/resources/io/termd/core/readline/inputrc">https://github.com/termd/termd/blob/58dc750ce989bf5297323f5e021383552f3fab51/src/main/resources/io/termd/core/readline/inputrc</a></li>
+<li>可以知道 Complete 事件是 <code>\C-i</code>，由 <code>Keys</code> 得知是 <code>CTRL_I</code> 事件，用途是用来补全文本的</li>
+</ol>
+
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/02/23/Kafka-%E7%9A%84%E6%94%92%E6%89%B9%E6%9C%BA%E5%88%B6/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="刘冰鉴">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="村里最好的博客">
+      <meta itemprop="description" content="Res severa est verum gaudium.">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | 村里最好的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022/02/23/Kafka-%E7%9A%84%E6%94%92%E6%89%B9%E6%9C%BA%E5%88%B6/" class="post-title-link" itemprop="url">Kafka 的攒批机制</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+
+      <time title="Created: 2022-02-23 19:50:39" itemprop="dateCreated datePublished" datetime="2022-02-23T19:50:39+08:00">2022-02-23</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">Edited on</span>
+      <time title="Modified: 2023-12-23 20:30:06" itemprop="dateModified" datetime="2023-12-23T20:30:06+08:00">2023-12-23</time>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <h2 id="介绍"><a href="#介绍" class="headerlink" title="介绍"></a>介绍</h2><p>本文的起因是在工作中到 Kafka 的使用<strong>最广泛、性能要求最高、问题最多的组件</strong>。而其中性能问题的<strong>调优思路往往与 Kafka 的攒批息息相关</strong>。所以这篇文章中会一起学习 Kafka 攒批原理及如何使用 Kafka 的攒批。</p>
+<h3 id="什么是攒批？"><a href="#什么是攒批？" class="headerlink" title="什么是攒批？"></a>什么是攒批？</h3><p>发送消息（Record）时，让消息在<strong>内存中</strong>驻留一段时间，等待多个消息同时达到可发送状态时，形成一次 Request 发送到 Server 中。</p>
+<h3 id="为什么需要攒批？"><a href="#为什么需要攒批？" class="headerlink" title="为什么需要攒批？"></a>为什么需要攒批？</h3><ul>
+<li>默认网络发送成本大于内存中流转成本。使用攒批可以极大提升吞吐量。</li>
+<li>对数据压缩有优势。增加吞吐量及减少存储成本。</li>
+</ul>
+<h4 id="攒批一定好吗？"><a href="#攒批一定好吗？" class="headerlink" title="攒批一定好吗？"></a>攒批一定好吗？</h4><ul>
+<li>攒批时间太长会影响时效性。</li>
+<li>由于消息是在内存中驻留的，会增加内存占用，可能影响 GC 反而减少了吞吐。</li>
+</ul>
+<h2 id="相关配置及方法原理"><a href="#相关配置及方法原理" class="headerlink" title="相关配置及方法原理"></a>相关配置及方法原理</h2><h3 id="相关-API-描述"><a href="#相关-API-描述" class="headerlink" title="相关 API 描述"></a>相关 API 描述</h3><p>在 <a target="_blank" rel="noopener" href="https://kafka.apache.org/34/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html">Producer</a> 的 API 中明确写到，Producer 是由 buffer space 与 background IO 组成的，而其中 buffer space 保存了尚未传输到 server 的 records，而这些 records 是有 <code>send</code>异步方法被调用时候传入到缓冲区中的。<br><code>buffer.memory</code> 控制生产者可用于缓冲的内存总量。 如果记录的发送速度快于它们可以传输到服务器的速度，则此缓冲区空间将被耗尽。 当缓冲区空间耗尽时，额外的发送调用将被阻塞。 阻塞时间的阈值由 max.block.ms 确定，超过它会抛出 TimeoutException。</p>
+<h3 id="Record-如何到-Server-中的？"><a href="#Record-如何到-Server-中的？" class="headerlink" title="Record 如何到 Server 中的？"></a>Record 如何到 Server 中的？</h3><p><img src="/images/kafka-batch/image_1.png" alt="Kafka.png"><br>Kafka 在 ProducerClient 中发送消息主要是由 <code>RecordAccumulate</code> 作为中转站，由主线程通过 <code>append</code> 方法根据 partition 不同追加消息进入 <code>ProduceBatch</code> 中，<code>Sender</code>线程每次轮询将准备好（<code>ready</code>方法）的消息通过 <code>drain()</code> 方法获取到，然后根据 Node 不同组成 <code>ProduceRequest</code> 发送给 KafkaServer。</p>
+<ol>
+<li>应用程序发送的消息通过拦截器和序列化得到消息的各个部分（<code>Header</code>、<code>key</code>、<code>value</code>…）</li>
+<li>消息分区之后通过 <code>RecordAccumulate#append</code>将消息放入 <code>ProducerBatch</code> 中，底层存储使用了 <code>BufferPool</code> 分配的 <code>ByteBuffer</code>，这里涉及到 Kafka 的内存控制，后续有机会介绍（坑1）</li>
+<li><code>Sender</code>通过 <code>ready</code> 方法询问是否有准备好发送的消息，如果有的话返回其 Node 信息</li>
+<li><code>Sender</code>通过 <code>drain</code> 方法从 <code>RecordAccumulate</code>中获取在 <code>max.request.size</code>配置下允许的所有 <code>ProducerBatch</code>，返回结果以 <code>Node</code>-&gt; <code>List&lt;ProducerBatch&gt;</code>作为映射。</li>
+<li>每个 Node 的 <code>List&lt;ProducerBatch&gt;</code>组装成 <code>ProduceRequest</code></li>
+<li>通过 <code>NetworkClient</code>发送给 <code>Server</code></li>
+</ol>
+<h3 id="有什么方式能控制攒批？"><a href="#有什么方式能控制攒批？" class="headerlink" title="有什么方式能控制攒批？"></a>有什么方式能控制攒批？</h3><ul>
+<li><code>RecordAccumulator</code>是属于 producer.internal 的类，主要就是控制攒批。</li>
+</ul>
+<p>类描述如下</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">/**</span><br><span class="line"> * This class acts as a queue that accumulates records into &#123;@link MemoryRecords&#125;</span><br><span class="line"> * instances to be sent to the server.</span><br><span class="line"> * &lt;p&gt;</span><br><span class="line"> * The accumulator uses a bounded amount of memory and append calls will block when that memory is exhausted, unless</span><br><span class="line"> * this behavior is explicitly disabled.</span><br><span class="line"> */</span><br></pre></td></tr></table></figure>
+<p>其中主要方法是</p>
+<h4 id="append：追加消息"><a href="#append：追加消息" class="headerlink" title="append：追加消息"></a><code>append</code>：追加消息</h4><p>会被 <code>Producer.doSend</code>调用，并返回一个携带有 <code>FutureRecordMeta</code>的返回结果；<br>主要实现：</p>
+<ol>
+<li>给每个 <code>partition</code> 分配一个 <code>Deque&lt;ProducerBatch&gt;</code>用于缓存消息</li>
+<li>如果 <code>Deque</code>非空则会最终调用 <code>MemoryRecordsBuilder.tryAppend</code>方法将 <code>Record</code> 累加到 <code>ProducerBatch</code>中</li>
+<li>如果 <code>Deque</code>为空，则开始重新生成 <code>ProducerBatch</code>(主要是生成其中的 <code>MemoryRecordsBuilder</code>再 <code>tryAppend</code></li>
+</ol>
+<p>即是说，Record 被 <code>ProducerBatch</code>保存了起来，等待发送。</p>
+<h4 id="ready-之后-drain"><a href="#ready-之后-drain" class="headerlink" title="ready() 之后 drain"></a><code>ready()</code> 之后 <code>drain</code></h4><p><code>Sender.sendProducerData</code> 是 <code>Sender</code>的核心方法在线程 <code>run</code> 的时候被持续调用，而在其方法的开头就调用了 <code>RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);</code>方法，核心就是在攒批准备好之后发送。我们先看看 <code>ready</code>的方法签名。</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Get a list of nodes whose partitions are ready to be sent, and the earliest time at which any non-sendable</span></span><br><span class="line"><span class="comment"> * partition will be ready; Also return the flag for whether there are any unknown leaders for the accumulated</span></span><br><span class="line"><span class="comment"> * partition batches.</span></span><br><span class="line"><span class="comment">   获取准备发送分区的节点列表，以及任何不可发送分区准备就绪的最早时间；</span></span><br><span class="line"><span class="comment">   还返回用于累积分区批次是否有任何未知领导者的标志。</span></span><br><span class="line"><span class="comment"> * &lt;/p&gt;</span></span><br><span class="line"><span class="comment"> * A destination node is ready to send data if:</span></span><br><span class="line"><span class="comment">   如果一个目的端 node 已经准备好了可以发送数据，则会有	</span></span><br><span class="line"><span class="comment"> * &lt;ol&gt;</span></span><br><span class="line"><span class="comment"> * &lt;li&gt;There is at least one partition that is not backing off its send</span></span><br><span class="line"><span class="comment">   至少有一个分区没有停止发送</span></span><br><span class="line"><span class="comment"> * &lt;li&gt;&lt;b&gt;and&lt;/b&gt; those partitions are not muted (to prevent reordering if</span></span><br><span class="line"><span class="comment"> *   &#123;@value org.apache.kafka.clients.producer.ProducerConfig#MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION&#125;</span></span><br><span class="line"><span class="comment"> *   is set to one)&lt;/li&gt;</span></span><br><span class="line"><span class="comment">   并且这些分区没有被锁（以防止在 MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION 被设置为 1 的时候重排序）</span></span><br><span class="line"><span class="comment"> * &lt;li&gt;&lt;b&gt;and &lt;i&gt;any&lt;/i&gt;&lt;/b&gt; of the following are true&lt;/li&gt;</span></span><br><span class="line"><span class="comment">   并且一下任何条件达到</span></span><br><span class="line"><span class="comment"> * &lt;ul&gt;</span></span><br><span class="line"><span class="comment"> *     &lt;li&gt;The record set is full&lt;/li&gt;</span></span><br><span class="line"><span class="comment">       RecordSet 满了</span></span><br><span class="line"><span class="comment"> *     &lt;li&gt;The record set has sat in the accumulator for at least lingerMs milliseconds&lt;/li&gt;</span></span><br><span class="line"><span class="comment">       RecrodSet 已经缓存了超过 lingerMs 时间</span></span><br><span class="line"><span class="comment"> *     &lt;li&gt;The accumulator is out of memory and threads are blocking waiting for data (in this case all partitions</span></span><br><span class="line"><span class="comment"> *     are immediately considered ready).&lt;/li&gt;</span></span><br><span class="line"><span class="comment">       Accumulator 内存不或者线程正在阻塞等待数据（这种情况下，所有分区都立即被视为已就绪）</span></span><br><span class="line"><span class="comment"> *     &lt;li&gt;The accumulator has been closed&lt;/li&gt;</span></span><br><span class="line"><span class="comment">       Accumulator 已经关闭</span></span><br><span class="line"><span class="comment"> * &lt;/ul&gt;</span></span><br><span class="line"><span class="comment"> * &lt;/ol&gt;</span></span><br><span class="line"><span class="comment"> */</span></span><br></pre></td></tr></table></figure>
+<p>接下来我们深入 <code>ready</code> 方法内部探索，由于我们的目的是分析原理，流程只会涉及到主要代码<br>首先 ready 会针对每个 <code>partition</code> 的 <code>Dequq</code> 进行一次循环来对每个分区数据进行检测</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> ReadyCheckResult <span class="title function_">ready</span><span class="params">(Cluster cluster, <span class="type">long</span> nowMs)</span> &#123;</span><br><span class="line">    Set&lt;Node&gt; readyNodes = <span class="keyword">new</span> <span class="title class_">HashSet</span>&lt;&gt;();</span><br><span class="line">    <span class="type">long</span> <span class="variable">nextReadyCheckDelayMs</span> <span class="operator">=</span> Long.MAX_VALUE;</span><br><span class="line">    Set&lt;String&gt; unknownLeaderTopics = <span class="keyword">new</span> <span class="title class_">HashSet</span>&lt;&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// free 表示是否内存(BufferPool)是否还有剩余，这也是 batch.size 配置生效的地方</span></span><br><span class="line">    <span class="type">boolean</span> <span class="variable">exhausted</span> <span class="operator">=</span> <span class="built_in">this</span>.free.queued() &gt; <span class="number">0</span>;</span><br><span class="line">    <span class="comment">// 循环遍历每个 partition 的数据，this.batches 使用了自实现的 CopyOnWriteMap 用于读多写少的并发场景</span></span><br><span class="line">    <span class="keyword">for</span> (Map.Entry&lt;TopicPartition, Deque&lt;ProducerBatch&gt;&gt; entry : <span class="built_in">this</span>.batches.entrySet()) &#123;</span><br><span class="line">        Deque&lt;ProducerBatch&gt; deque = entry.getValue();</span><br><span class="line">        <span class="keyword">synchronized</span> (deque) &#123;</span><br><span class="line">            <span class="comment">// 这里如果存在大量 paritition 时会成为热点，首先检查 batch 是否存在可以避免后续检查的成本</span></span><br><span class="line">            <span class="type">ProducerBatch</span> <span class="variable">batch</span> <span class="operator">=</span> deque.peekFirst();</span><br><span class="line">            <span class="keyword">if</span> (batch != <span class="literal">null</span>) &#123;</span><br><span class="line">                <span class="comment">// 获取 partition 的 leader 节点，这里如果节点不存在会其放入结果中，这里不展示</span></span><br><span class="line">                <span class="type">TopicPartition</span> <span class="variable">part</span> <span class="operator">=</span> entry.getKey();</span><br><span class="line">                <span class="type">Node</span> <span class="variable">leader</span> <span class="operator">=</span> cluster.leaderFor(part);</span><br><span class="line">                <span class="comment">// readyNodes 是避免重复判断，isMuted 的机制与 max.in.flight.requests.per.connection 保序相关，后续详聊，这里简单理解就是不发送该 partition 数据</span></span><br><span class="line">            	<span class="keyword">if</span> (!readyNodes.contains(leader) &amp;&amp; !isMuted(part)) &#123;</span><br><span class="line">                    <span class="comment">// waitedTimeMs: batch 等待时间</span></span><br><span class="line">                    <span class="comment">// backingOff：是否不需要重试(等待时间小于重试时间间隔)</span></span><br><span class="line">                    <span class="comment">// timeToWaitMs：最终等待发送时间，如果是重试就 retryBackoffMs，否则就 lingerMs</span></span><br><span class="line">                    <span class="type">long</span> <span class="variable">waitedTimeMs</span> <span class="operator">=</span> batch.waitedTimeMs(nowMs);</span><br><span class="line">                    <span class="type">boolean</span> <span class="variable">backingOff</span> <span class="operator">=</span> batch.attempts() &gt; <span class="number">0</span> &amp;&amp; waitedTimeMs &lt; retryBackoffMs;</span><br><span class="line">                    <span class="type">long</span> <span class="variable">timeToWaitMs</span> <span class="operator">=</span> backingOff ? retryBackoffMs : lingerMs;</span><br><span class="line">                    <span class="comment">// deque.size() &gt; 1 表示最少有一个 ProducerBatcher 是满了</span></span><br><span class="line">                    <span class="comment">// batch.isFull() 的判断逻辑就是 pool 被关了或者是大于之前设置的预设值(batch.size)</span></span><br><span class="line">                    <span class="comment">// 关于 batch 的 size 值设定是在 append 创建 ProducerBatch 的时候通过 Accumulate 中 batchSize 创建得到的</span></span><br><span class="line">                    <span class="comment">// 实际就是 BufferPool 中的 limit</span></span><br><span class="line">                    <span class="type">boolean</span> <span class="variable">full</span> <span class="operator">=</span> deque.size() &gt; <span class="number">1</span> || batch.isFull();</span><br><span class="line">                    <span class="comment">// 是否等待过了</span></span><br><span class="line">                    <span class="type">boolean</span> <span class="variable">expired</span> <span class="operator">=</span> waitedTimeMs &gt;= timeToWaitMs;</span><br><span class="line">                    <span class="comment">// 事务相关的忽略了...</span></span><br><span class="line">                    <span class="type">boolean</span> <span class="variable">sendable</span> <span class="operator">=</span> full   <span class="comment">// 超过 BufferPool 的 limit</span></span><br><span class="line">                        || expired            <span class="comment">// 超过 lingerMs 或需要重试</span></span><br><span class="line">                        || exhausted          <span class="comment">// 超过 batch.size</span></span><br><span class="line">                        || closed             <span class="comment">// Accumulate 关闭</span></span><br><span class="line">                        || flushInProgress(); <span class="comment">// 被调用了 flash</span></span><br><span class="line">                    <span class="keyword">if</span> (sendable &amp;&amp; !backingOff) &#123;</span><br><span class="line">                        readyNodes.add(leader);</span><br><span class="line">                    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                        <span class="type">long</span> <span class="variable">timeLeftMs</span> <span class="operator">=</span> Math.max(timeToWaitMs - waitedTimeMs, <span class="number">0</span>);</span><br><span class="line">                        <span class="comment">// Note that this results in a conservative estimate since an un-sendable partition may have</span></span><br><span class="line">                        <span class="comment">// a leader that will later be found to have sendable data. However, this is good enough</span></span><br><span class="line">                        <span class="comment">// since we&#x27;ll just wake up and then sleep again for the remaining time.</span></span><br><span class="line">                        nextReadyCheckDelayMs = Math.min(timeLeftMs, nextReadyCheckDelayMs);</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">ReadyCheckResult</span>(readyNodes, nextReadyCheckDelayMs, unknownLeaderTopics);</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>在 <code>Sender</code>中通过 <code>ready</code> 得到 readyNodes 之后，调用 <code>drain</code>返回 <code>node.id</code>与 <code>List&lt;ProducerBatch&gt;</code> 的 Map。**这样间接说明，Producer 会将发送往一个 Node 的数据 Merge 到一次请求中，这里在 **<code>**Sender#sendProduceReqest**</code><strong>中可以清晰的看到，所以说，测试性能得用多节点，单节点 partition 数量不是真实场景</strong>。<br><code>drain</code>方法主要是针对每个 ready node 调用 <code>drainBatchesForOneNode</code> 方法然后汇聚成 <code>Map&lt;Integer, List&lt;ProducerBatch&gt;&gt;</code> 返回给 <code>Sender</code><br>方法签名:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Drain all the data for the given nodes and collate them into a list of batches that will fit within the specified</span></span><br><span class="line"><span class="comment"> * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment">	drain 给定节点(nodes) 的所有数据并将其整理成每个节点批次的指定大小（maxSize），返回列表信息，避免选择相同的节点</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> cluster The current cluster metadata</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> nodes The list of node to drain</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> maxSize The maximum number of bytes to drain</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> now The current unix time in milliseconds</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@return</span> A list of &#123;<span class="doctag">@link</span> ProducerBatch&#125; for each node specified with total size less than the requested maxSize.</span></span><br><span class="line"><span class="comment"> */</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> List&lt;ProducerBatch&gt; <span class="title function_">drainBatchesForOneNode</span><span class="params">(Cluster cluster, Node node, <span class="type">int</span> maxSize, <span class="type">long</span> now)</span> &#123;</span><br><span class="line">    <span class="type">int</span> <span class="variable">size</span> <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line">    List&lt;PartitionInfo&gt; parts = cluster.partitionsForNode(node.id());</span><br><span class="line">    List&lt;ProducerBatch&gt; ready = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">    <span class="comment">// drainIndex 是从之前轮询中保留下来的，其递增逻辑变更是 (drainIndex + 1) % parts.size()</span></span><br><span class="line">    <span class="comment">// 主要是为了在循环中的 break 条件触发后从 break 的节点开始轮询，减少空轮询</span></span><br><span class="line">    <span class="comment">// 再次 mod parts.size 是为了防止 partition 数量变更</span></span><br><span class="line">    <span class="type">int</span> <span class="variable">start</span> <span class="operator">=</span> drainIndex = drainIndex % parts.size();</span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">        <span class="type">PartitionInfo</span> <span class="variable">part</span> <span class="operator">=</span> parts.get(drainIndex);</span><br><span class="line">        <span class="type">TopicPartition</span> <span class="variable">tp</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">TopicPartition</span>(part.topic(), part.partition());</span><br><span class="line">        <span class="built_in">this</span>.drainIndex = (<span class="built_in">this</span>.drainIndex + <span class="number">1</span>) % parts.size();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 同步块，这里前面省略了对于 patition 及 deque 不处理情况的判断</span></span><br><span class="line">        <span class="comment">// 忽略 deque 为空及重试的场景代码</span></span><br><span class="line">        <span class="keyword">synchronized</span> (deque) &#123;</span><br><span class="line">            <span class="comment">// 当前批次不为空且 size 值将要超过 maxSize 时视为结束，可以发送了</span></span><br><span class="line">            <span class="keyword">if</span> (size + first.estimatedSizeInBytes() &gt; maxSize &amp;&amp; !ready.isEmpty()) &#123;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="comment">// 针对 transaction 消息的设置，正常发送消息不会涉及，这里忽略</span></span><br><span class="line">                <span class="keyword">if</span> (shouldStopDrainBatchesForPartition(first, tp))</span><br><span class="line">                    <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">                <span class="comment">// 忽略事务相关内容，后续单独说明...（坑2）</span></span><br><span class="line">                <span class="comment">// 本次 batch 不允许再 append，将其放入 ready 中，设置 drain 时间</span></span><br><span class="line">                batch.close();</span><br><span class="line">                size += batch.records().sizeInBytes();</span><br><span class="line">                ready.add(batch);</span><br><span class="line"></span><br><span class="line">                batch.drained(now);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">while</span> (start != drainIndex);</span><br><span class="line">    <span class="keyword">return</span> ready;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="场景测试"><a href="#场景测试" class="headerlink" title="场景测试"></a>场景测试</h2><p>在 Kafka2.x 的版本中体会以下几个版本 batch 上的差异。</p>
+<ol>
+<li>使用 Kafka 自带的压测脚本</li>
+<li>4K 消息</li>
+<li>单节点（测试存在偏差性，条件有限，后面补充多节点测试）</li>
+</ol>
+<h3 id="batch-size-影响"><a href="#batch-size-影响" class="headerlink" title="batch.size 影响"></a><code>batch.size</code> 影响</h3><p>JVM 内存 512M<br>lingerMs 固定 10 ms<br>max.request.size 固定 16M<br>buffer.memory  固定 16M<br>max.in.flight.requests.per.connection &#x3D; 1<br>命令</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">./bin/kafka-producer-perf-test.sh --topic test \</span><br><span class="line">--num-records <span class="number">1000000</span> \</span><br><span class="line">--record-size <span class="number">4000</span> \</span><br><span class="line">--throughput -<span class="number">1</span> \</span><br><span class="line">--producer-props bootstrap.servers=<span class="number">11.162</span><span class="number">.217</span><span class="number">.15</span>:<span class="number">9093</span> compression.type=lz4 linger.ms=<span class="number">10</span> max.request.size=<span class="number">16777216</span> buffer.memory=<span class="number">16777216</span> batch.size=<span class="number">100</span> max.in.flight.requests.per.connection=<span class="number">1</span></span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th>batch.size</th>
+<th>数据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>100</td>
+<td>17.20 MB&#x2F;sec</td>
+</tr>
+<tr>
+<td>16384 (16K)</td>
+<td>281.92 MB&#x2F;sec</td>
+</tr>
+<tr>
+<td>131072 (128K)</td>
+<td>984.49 MB&#x2F;sec</td>
+</tr>
+<tr>
+<td>1048576 (1M)</td>
+<td>1098.23 MB&#x2F;sec</td>
+</tr>
+<tr>
+<td>16777216 (16M)</td>
+<td>841.21 MB&#x2F;sec</td>
+</tr>
+</tbody></table>
+<h3 id="linger-ms影响"><a href="#linger-ms影响" class="headerlink" title="linger.ms影响"></a><code>linger.ms</code>影响</h3><p>JVM 内存 512M<br>batch.size 固定 16384 ms<br>max.request.size 固定 16M<br>buffer.memory  固定 16M<br>max.in.flight.requests.per.connection  &#x3D; 1</p>
+<p>测试下来在压测场景下影响不大，因为 <code>batch.size</code> 的条件会优先被满足。</p>
+<h2 id="同类产品的原理对比"><a href="#同类产品的原理对比" class="headerlink" title="同类产品的原理对比"></a>同类产品的原理对比</h2><h3 id="RocketMQ"><a href="#RocketMQ" class="headerlink" title="RocketMQ"></a>RocketMQ</h3><p><code>RocketMQ</code>也同样有消息攒批逻辑，参数相差不大：</p>
+<ul>
+<li><code>batchSize</code>：表示消息批的大小，单位是字节。当达到批大小后，RocketMQ 会将消息发送到 Broker。</li>
+<li><code>maxDelayTime</code>：表示最大的等待时间，单位是毫秒。当等待时间超过该时间后，RocketMQ 会将消息发送到 Broker。</li>
+</ul>
+<h3 id="Pulsar"><a href="#Pulsar" class="headerlink" title="Pulsar"></a>Pulsar</h3><p><code>Pulsar</code>参数差距同样不大：</p>
+<ul>
+<li><code>batchingEnabled</code>：表示是否启用消息批处理，默认为 false。</li>
+<li><code>batchingMaxMessages</code>：表示消息批的最大数量，默认为 1。</li>
+<li><code>batchingMaxPublishDelayMicros</code>：表示最大的等待时间，单位是微秒。当等待时间超过该时间后，Pulsar 会将消息发送到 Broker。</li>
+</ul>
+
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2021/12/03/%E4%BB%8EProducer%E5%88%B0%E6%97%A5%E5%BF%97%E8%90%BD%E7%9B%98/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="刘冰鉴">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="村里最好的博客">
+      <meta itemprop="description" content="Res severa est verum gaudium.">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | 村里最好的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2021/12/03/%E4%BB%8EProducer%E5%88%B0%E6%97%A5%E5%BF%97%E8%90%BD%E7%9B%98/" class="post-title-link" itemprop="url">从Producer到日志落盘</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+
+      <time title="Created: 2021-12-03 21:08:27" itemprop="dateCreated datePublished" datetime="2021-12-03T21:08:27+08:00">2021-12-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">Edited on</span>
+      <time title="Modified: 2023-12-23 20:07:02" itemprop="dateModified" datetime="2023-12-23T20:07:02+08:00">2023-12-23</time>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <h1 id="文章简介"><a href="#文章简介" class="headerlink" title="文章简介"></a>文章简介</h1><ul>
+<li>[正常]叙述 Kafka 从 Producer 发送消息到 Server 日志落盘全过程 </li>
+<li>[提升]详解 Kafka 日志格式，并通过 Java &#x2F; Rust 两类解析方式 </li>
+<li>[深入]Rust-Kafka-Client Producer 到 Kafka Server </li>
+<li><strong>需要说明的是这篇文章的局限性</strong> <ul>
+<li>仅介绍两个 topic 各有两个 partition 为基础进行介绍，会调用 <code>flush</code> 强行将消息刷新进入 topic 内。发送消息每个 partition 各 5 条</li>
+<li>不涉及鉴权部分</li>
+<li>不涉及事务消息及有序消息部分</li>
+<li>Kafka 版本 3.1.0，如无必要不会涉及老版本的历史包袱说明</li>
+<li>流程图中只记录关键路径，关键信息，部分细节信息可能需要细看代码才行，但是不妨碍原理理解</li>
+<li>这其中会涉及到 <code>Replica</code> 跟 <code>Network</code> 的部分知识，但是在这篇文章中只会涉及到比较浅显的部分，我们默认网络层和主副本是对我们透明的，对其中细节及设计部分我们会在另外的文章中讲解。</li>
+</ul>
+</li>
+</ul>
+<h1 id="请求到落盘"><a href="#请求到落盘" class="headerlink" title="请求到落盘"></a>请求到落盘</h1><h2 id="Producer-流程"><a href="#Producer-流程" class="headerlink" title="Producer 流程"></a>Producer 流程</h2><h4 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h4><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">./kafka-topics --bootstrap-server localhost:<span class="number">9092</span> -create --topic dove_1 --partitions <span class="number">2</span> --replication-factor <span class="number">1</span></span><br><span class="line">./kafka-topics --bootstrap-server localhost:<span class="number">9092</span> -create --topic dove_2 --partitions <span class="number">2</span> --replication-factor <span class="number">1</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">KafkaProducerEx</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        <span class="type">Properties</span> <span class="variable">producerProps</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Properties</span>();</span><br><span class="line">				<span class="comment">// set properties</span></span><br><span class="line">        KafkaProducer&lt;String, String&gt; producer = <span class="keyword">new</span> <span class="title class_">KafkaProducer</span>&lt;&gt;(producerProps);</span><br><span class="line"></span><br><span class="line">        List&lt;ProducerRecord&lt;String, String&gt;&gt; msgs = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">				<span class="comment">// add msgs</span></span><br><span class="line">        List&lt;Future&lt;RecordMetadata&gt;&gt; fs = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">        <span class="keyword">for</span> (ProducerRecord&lt;String, String&gt; msg : msgs) &#123;</span><br><span class="line">            Future&lt;RecordMetadata&gt; future = producer.send(msg);</span><br><span class="line">            fs.add(future);</span><br><span class="line">        &#125;</span><br><span class="line">				<span class="keyword">assert</span> fs.stream().noneMatch(Future::isDone);</span><br><span class="line">        producer.flush();</span><br><span class="line">        <span class="keyword">assert</span> fs.stream().allMatch(Future::isDone);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> List&lt;ProducerRecord&lt;String, String&gt;&gt; <span class="title function_">buildRandomMsg</span><span class="params">(String topic, <span class="type">int</span> partition)</span> &#123;</span><br><span class="line">        List&lt;ProducerRecord&lt;String, String&gt;&gt; msgs = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; <span class="number">5</span>; i++) &#123;</span><br><span class="line">            <span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> String.format(<span class="string">&quot;%s-%d-key-%d&quot;</span>, topic, partition, i);</span><br><span class="line">            <span class="type">String</span> <span class="variable">value</span> <span class="operator">=</span> String.format(<span class="string">&quot;%s-%d-value-%d&quot;</span>, topic, partition, i);</span><br><span class="line">            ProducerRecord&lt;String, String&gt; msg = <span class="keyword">new</span> <span class="title class_">ProducerRecord</span>&lt;&gt;(topic, partition, key, value);</span><br><span class="line">            msgs.add(msg);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> msgs;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>产物</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">➜  dove_1-0 ls</span><br><span class="line">00000000000000000000.index     00000000000000000000.log       00000000000000000000.timeindex leader-epoch-checkpoint        partition.metadata</span><br></pre></td></tr></table></figure>
+<h3 id="流程说明"><a href="#流程说明" class="headerlink" title="流程说明"></a>流程说明</h3><p><code>KafkaProducer</code> 发送消息实际上看只分为两个线程进行</p>
+<ul>
+<li>Main 线程，及由 <code>KafkaProducer</code> 线程发起的，最终 Record 会经过拦截器、序列化到 <code>RecordAccumulator</code> 中并缓存称为 ProducerBatch 保存。</li>
+<li>Sender 线程，持续运行，主要是将 <code>RecordAccumulator</code> 攒批的消息取出，构建 Request(Header + Body) (通过网络处理层)发送到 Server 端</li>
+</ul>
+<h2 id="流程说明-1"><a href="#流程说明-1" class="headerlink" title="流程说明"></a>流程说明</h2><p>KafkaProducer 发送消息实际上看只分为两个线程进行</p>
+<ul>
+<li>Main 线程，及由 KafkaProducer 线程发起的，最终 Record 会经过拦截器、序列化到 RecordAccumulator 中并缓存称为 ProducerBatch 保存。</li>
+<li>Sender 线程，持续运行，主要是将 RecordAccumulator 攒批的消息取出，构建 Request(Header + Body) (通过网络处理层)发送到 Server 端</li>
+</ul>
+<h3 id="主线程"><a href="#主线程" class="headerlink" title="主线程"></a>主线程</h3><h4 id="攒批"><a href="#攒批" class="headerlink" title="攒批"></a>攒批</h4><p>ProducerBatch攒批是由 KafkaProducer 用户的 send 方法发起，然后由 RecordAccumulator 生成 ProducerBatch 结束的<br><img src="/images/kafka_producer/image_2.png" alt="image.png"></p>
+<ul>
+<li>这里值得关注的细节<ul>
+<li>KafkaProducer 的 send 实际并没有同步的实现方式</li>
+<li>RecordAccumulator 的缓存是通过 CopyOnWriteMap ，其中 Key 是以 TopicPartition 的维度进行组织的，其中的 Value 是一个 ArrayDeque<ProducerBatch> 以保证有序。RecordAccumulator 缓存条件在 Sender 线程中有描述</li>
+</ul>
+</li>
+</ul>
+<h4 id="构建字节码"><a href="#构建字节码" class="headerlink" title="构建字节码"></a>构建字节码</h4><p>由攒批的 4.4 tryAppend 中是构建 Record 字节码的流程，整体流程如下<br><img src="/images/kafka_producer/image_3.png" alt="image.png"></p>
+<ul>
+<li>这里有部分细节需要注意<ul>
+<li>append 中实际 MemoryRecordsBuilder 还负责使用 nextSequentialOffset 生成 Batch 中的相对 offset ，生成方式是 lastOffset &#x3D;&#x3D; <em>null</em> ? baseOffset : lastOffset + 1，这其中 baseOffset 初始化是在 RecordAccumulator 中创建是 0，而 lastOffset 的值在 append 方法成功写入的最后会更新为当前 offset 值(recordWritten)</li>
+<li>append 的时候会传递一个 timestamp 值，这个值是由用户传递或者是自动生成，生成时间是 send 方法调用时间</li>
+<li>最终构成的 record 格式见下文日志格式详解</li>
+</ul>
+</li>
+</ul>
+<h4 id="flush-流程"><a href="#flush-流程" class="headerlink" title="flush 流程"></a>flush 流程</h4><p><img src="/images/kafka_producer/image_4.png" alt="image.png"><br>本质是让缓存 ready 与让 sender 线程阻塞结束<br>这里需要先介绍 flush.wakeup 机制：本质是调用 NIO Selector.wakeup ，即往管道中写入一个字节使得 Selector.poll 能获得数据这样就不再阻塞立即返回，驱动 Sender 线程运行</p>
+<h3 id="Sender-线程运行流程"><a href="#Sender-线程运行流程" class="headerlink" title="Sender 线程运行流程"></a>Sender 线程运行流程</h3><h4 id="整体流程"><a href="#整体流程" class="headerlink" title="整体流程"></a>整体流程</h4><p><img src="/images/kafka_producer/image_1.png" alt="image.png"><br>细节说明:</p>
+<ul>
+<li>2.2 中 RecordAccumulator.ready 中详细叙述了哪个 nodeId 算是 ready 了，需要符合以下条件（且关系）： <ul>
+<li>至少 node 中有一个 partition 没有处于 backingoff 的状态（batch.attempts() &gt; 0 &amp;&amp; waitedTimeMs &lt; retryBackoffMs 即需要重试并且重试等待时间尚未达到）</li>
+<li>node 中的 partition 没有被其他写入操作持有(isMute，会发生在保序消息发送上)</li>
+<li>满足以下任意条件 <ul>
+<li>缓冲队列满了(deque.size &gt; 1|| batch.full())即 partition 等待 batch 数量超过 1 个或者 Producer 被关闭&#x2F; 消息大小超过配置大小，这个配置简单可以理解成 _BATCH_SIZE_CONFIG_，如果单个消息超过了该配置情况会经过 AbstractRecords.estimateSizeInBytesUpperBound 计算得到)</li>
+<li>等待时间超过 ProducerConfig.LINGER_MS_CONFIG 了</li>
+<li>没有空闲内存（Record 的内存是提前分配的）</li>
+<li>触发了 flush 操作(RecordAccumulator.beginFlush())</li>
+<li>RecordAccumulator 被 closed</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>对于 2.2 得到的 unknownTopic 的处理：更新元数据</li>
+<li>2.11 sendProduceRequest 详见下面发送消息详情，这里的 batches 其结构是 Map&lt;NodeId, List<ProducerBatch> ，其中 NodeId 是 Integer 格式，提供给 Server 端找到具体存储节点的标识，这里在 Server 流程中也会详解路由流程</li>
+</ul>
+<h4 id="sendProducerRequest"><a href="#sendProducerRequest" class="headerlink" title="sendProducerRequest"></a>sendProducerRequest</h4><p>通过给到的 List<ProducerBatch> 构建实际给到 Server 的 Request(Header + Body)</p>
+<ol>
+<li>主体流程</li>
+</ol>
+<p><img src="/images/kafka_producer/image_5.png" alt="image.png"><br>第一步生成 MemoryRecords 实际就是 ProducerRecord 生成 Buffer 的步骤，也是组成 ProducerRequest 重要一部分，这个在下文日志格式中会细说。<br>第三步 callback 是等待 Server 返回响应之后调用的，实际 Kafka Client 的交互都依赖于 callback 模式，等待 NetworkClient 调用，这个机制后续会单独出文细说。</p>
+<h5 id="callback-返回响应"><a href="#callback-返回响应" class="headerlink" title="callback-返回响应"></a>callback-返回响应</h5><p><img src="/images/kafka_producer/image_6.png" alt="image.png"></p>
+<h5 id="callback-资源回收"><a href="#callback-资源回收" class="headerlink" title="callback-资源回收"></a><strong>callback-资源回收</strong></h5><p><img src="/images/kafka_producer/image_7.png" alt="image.png"></p>
+<h4 id="NetworkClient-send-发送网络请求"><a href="#NetworkClient-send-发送网络请求" class="headerlink" title="NetworkClient.send: 发送网络请求"></a>NetworkClient.send: 发送网络请求</h4><p><img src="/images/kafka_producer/image_8.png" alt="image.png"><br><code>InFlightBatches</code> 机制，缓存了发送出去但还没接收到响应的请求，存储格式是 <code>Map&lt;NodeId, Deque&lt;Request&gt;&gt;</code> 。能用来干啥？</p>
+<ul>
+<li>通过 <code>max.in.flight.requests.per.connector</code> 限制每个连接最多缓存的未响应请求</li>
+<li>较多的管理方法，可以用于请求是否完成(<code>handleCompletedSends</code>)、获取过期请求(<code>handleTimedOutRequests</code>)</li>
+</ul>
+<h4 id="toSend"><a href="#toSend" class="headerlink" title="toSend"></a>toSend</h4><p>生成发送到 Server 中的数据，这里会通过 ProducerRequestData 递归式的构建 buffer，其中每份 Partition 的 Records 会组合成一个 buffer，最终成型的时候会通过 TransferableChannel.write(ByteBuffer[] srcs) 写入到网络层<br><img src="/images/kafka_producer/image_9.png" alt="image.png"><br>其中 2、3、4 步骤是构成数据的关键步骤，2&#x2F;3 其实相对都简单，可以参考下文的消息格式得出。而 4 是我们 Records 发送的数据，同时由于一次发送是以 NodeId 为维度来发送的，所以可能一次会有多 Topic 及多 Partition 的数据，而他们的组织又是一个很好的亮点了，图中只是简单描述了其组织形式，即每个 partition 的数据会单独作为一个 buffer 加入最终要发送的 buffers 段中，具体可以参考下文日志格式详解。</p>
+<h4 id="NetworkClient-poll-：等待网络阻塞，处理响应并调用-callback-方法，可以说是关键方法了。"><a href="#NetworkClient-poll-：等待网络阻塞，处理响应并调用-callback-方法，可以说是关键方法了。" class="headerlink" title="NetworkClient.poll() ：等待网络阻塞，处理响应并调用 callback 方法，可以说是关键方法了。"></a>NetworkClient.poll() ：等待网络阻塞，处理响应并调用 callback 方法，可以说是关键方法了。</h4><p><img src="/images/kafka_producer/image_10.png" alt="image.png"></p>
+<h2 id="Server-流程"><a href="#Server-流程" class="headerlink" title="Server 流程"></a>Server 流程</h2><p>Request 在 Server 的处理步骤是这样的（简单叙述，后续网络协议详解）</p>
+<ol>
+<li>根据 <code>MsgSize</code> 来确定收到网络请求为完整的包，并记录数据(参考 <code>Selector#attemptRead</code> 中的 <code>bytesReceived = channel.read()</code> 对于网络请求的读取操作)，读取之后后续分割为 Header + RequestBody 两部分</li>
+<li><code>RequestHeader</code> 在 <code>SocketServer#parseRequestHeader</code> 中解析得到 <code>apiKey</code> 和 <code>apiVersion</code> 两部分</li>
+<li>根据 <code>apiKey</code>  跟 <code>apiVersion</code> 解析 RequestBody 部分( <code>RequestContext#parseRequest</code>)，最终落地到具体 <code>ProduceRequest.parse</code> 中</li>
+</ol>
+<p>当 <code>Selector</code> 通过 <code>KafkaChannel</code> 将 <code>Send</code> 发出的时候会统一被 Server 的 <code>KafkaRequestHandler</code>(在 core 中的 <code>kafka.server</code> package 下) 处理。<br>随后在 <code>KafkaApis.handle</code> 中鉴定出来是 <code>ApiKeys.PRODUCE</code> 的消息，交由 <code>KafkaApis.handleProduceRequest</code> 方法处理, <code>ApiKey</code> 的指定是在 <code>ProduceRequest</code> 的构造器中就 set 了。如果这段描述没有问题的话我们的流程解析就从 <code>KafkaApis.handleProduceRequest</code> 开始了，与上文一样，会忽略细节，关注主要的数据处理流程。</p>
+<p><img src="/images/kafka_producer/image_11.png" alt="image.png"></p>
+<h3 id="写消息大流程-appendRecords。"><a href="#写消息大流程-appendRecords。" class="headerlink" title="写消息大流程 appendRecords。"></a>写消息大流程 appendRecords。</h3><p>负责将消息以 TopicPartition 的维度将一个 partition 的 records 写入到文件中<br><img src="/images/kafka_producer/image_12.png" alt="image.png"></p>
+<ul>
+<li>写入日志涉及到多个组件 <ul>
+<li><code>ReplicaManager</code>: 以 Replica 为单位(分配在 Broken (机器上) )来管理 Kafka Log，主要由： <ul>
+<li><code>Scheduler</code>: 来管理以下调度任务 <ul>
+<li><code>highwatermark-checkpoint</code>: HighWatermark(HW) 是表明已备份的日志位点，这个定时任务会定时将 HW 刷新到 checkpoint  文件中</li>
+<li><code>isr-expiration</code>: ISR(<code>**In-sync Replicas**</code>) 是确定哪些副本是与 Leader  同步的，该任务是管理 ISR 中 partition 到期之后更新 ISR 列表</li>
+<li><code>shutdown-idle-replica-alter-log-dirs-thread</code>: 定时关闭空闲的 ReplicaAlterDirThread 线程，ReplicaAlterDirThread 是用来同步更新的 Replica 来替代当前 Replica 的 partitionMap 的，但是如果 partitionMap 是空的话它并不会自动关闭，所以就需要改定时任务。</li>
+</ul>
+</li>
+<li><code>LogManager</code>: 统一管理日志操作入口</li>
+</ul>
+</li>
+<li><code>Partition</code>: 负责单个 Partition 操作，是线程安全的。这里是作为 Leader 响应 append 请求并维护 HW</li>
+<li><code>UnifiedLog</code>: 提供 Local 和 <a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-405%3A+Kafka+Tiered+Storage">Tiered Log</a> (Kafka 云端存储实现，目前看只有在 Confluent Platform 实现，在源码中没看到具体实现) Segment 的统一视图</li>
+<li><code>LocalLog</code>：维护了 LogSegment 的 List，每一个 LogSegment 均携带一个独有的 <code>base offset</code>, 用于 <strong>append-only Log 操作</strong>。同时基于配置项与当前活跃的 Segment 的创建时间间隔与存储容量<strong>决定是否创建新的 LogSegment</strong></li>
+<li><code>LogSegment</code> ： 基本可以表示日志实体了，代表 Broken 中某些文件（日志文件(<code>FileRecords</code>)、offset 索引文件(<code>OffsetIndex</code>)、timestamp 索引文件(<code>TimeIndex</code>)），其操作也是对于该文件的操作。</li>
+<li><code>FileRecord</code>:  实际的日志文件实体，其中包含 <code>FileChannel</code> 的 NIO 接口用于 IO 操作</li>
+<li><code>MemoryRecord</code>: 包含 Producer 传递上来的 Record Bytes，使用 <code>FileChannel</code> 写入到文件中</li>
+</ul>
+</li>
+<li>在 <code>UnifiedLog#analyzeAndValidateRecords</code> 中通过 <code>DefaultRecordBatch</code> 会解析部分 record 的 header 信息来构成 <code>LogAppendInfo</code> 在后续使用，比如 lastOffset 等信息是构成 index 文件内容的关键要素。</li>
+<li>Segment 的组织方式 <ul>
+<li>在 <code>UnifiedLog#maybeRoll</code> 方法中如果满足以下条件可能会生成新的 <code>LogSegment</code> ，需要注意的是这个是一个同步（以 <code>UnifiedLog</code> 的维度阻塞）方法： <ul>
+<li><code>LogSegment</code> is full: <code>size &gt; rollParams.maxSegmentBytes - rollParams.messagesSize</code></li>
+<li><code>LogSegment</code> 中的第一条消息 timestamp 距离现在已经超过配置的 maxTime: <code>timeWaitedForRoll(rollParams.now, rollParams.maxTimestampInMessages) &gt; rollParams.maxSegmentMs - rollJitterMs</code></li>
+<li>index is full: <code>offsetIndex.isFull || timeIndex.isFull</code></li>
+</ul>
+</li>
+<li>Roll 这个操作是怎么操作的呢？ <ul>
+<li>首先获取 <code>rollOffset</code> 作为新生成的 <code>LogSegment</code> 的 base offset，如果获取失败则采用 <code>maxOffsetInMessages - Integer.MAX_VALUE</code> 作为一个启发式的 base offset 的值，这样它会小于真实 first offset（因为历史原因在之前版本中 first offset 的获取是需要解压缩的）</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> maxOffsetInMessages = appendInfo.lastOffset</span><br><span class="line"><span class="keyword">val</span> rollOffset = appendInfo</span><br><span class="line">        .firstOffset</span><br><span class="line">        .map(_.messageOffset)</span><br><span class="line">        .getOrElse(maxOffsetInMessages - <span class="type">Integer</span>.<span class="type">MAX_VALUE</span>)</span><br></pre></td></tr></table></figure>
+
+<pre><code>  - `UnifiedLog#roll` 方法直接调用了 `LocalLog#roll` 方法新增了 `LogSegment`，同时还启动了 `flush-log` 的调度任务清理过期日志、更新 HW、更新 `ProducerStateManager` 快照
+  - `LocalLog#roll` 操作 
+     - 生成三个文件 `offsetIdxIndex` , `timeIdxFile` , `txnIdxFile`
+     - 将当前活跃的 `segment` 置为不可写状态 `onBecomeInactiveSegment`(通过添加一个 `largest time index entry`  到日志和索引文件最后一行并将当前文件保留字节之后的内容均使用 `truncateTo` 的方式截取了以避免文件空洞)
+     - 通过 `LogSegment#open` 生成新的 Segment 并加入到 `LogSegments` 中，由于 `LocalLog#activeSegment` 是获取 `LogSegments` 的最后一个 segment 的，自然也就更新了
+     - 更新 `LogEndOffset`
+</code></pre>
+<ul>
+<li>在 <code>LocalLog</code> 以 <code>LogSegments</code> 的数据结构管理，以 <code>ConcurrentNavigableMap[Long, LogSegment]</code> 其中 key 是 <code>LogSegment</code> 的 base offset。提供了增删查改的简单方法。 </li>
+<li>FileChannel 写文件方式可以参考：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/27650977">https://zhuanlan.zhihu.com/p/27650977</a></li>
+</ul>
+<h2 id="日志文件解析"><a href="#日志文件解析" class="headerlink" title="日志文件解析"></a>日志文件解析</h2><p>我们通过上面的分析大概得出两个方向来分析 <code>ProducerRequest</code>  ，一个是 Producer 写的部分也就是涉及 <code>MemoryRecordsBuilder</code> 到 <code>NetworkClient.toSend</code> 部分；第二个是从 <code>Server</code> 解析的部分，从 <code>Selector#attemptRead</code> 开始到 <code>RequestHeader</code> 再到 <code>ProducerRequest#parse</code> 来看。不管是通过哪个部分都可以得到以下的结构（<strong>不过涉及到 key value 的部分还是需要在 <strong><code>**MemoryRecordsBuilder#appendDefaultRecord**</code></strong> 中寻找答案的，Server 并不会解析内容，自会存储字节</strong>）。分为三个部分。</p>
+<ul>
+<li>Request 消息体 <ul>
+<li>MsgSize：表示请求体大小</li>
+<li>RequestHeader：只包含两个字段 <ul>
+<li><code>apiKey</code>: 标记请求类型</li>
+<li><code>apiVersion</code>: 标记客户端版本</li>
+</ul>
+</li>
+<li>ProducerRequestData <ul>
+<li><code>length</code>(transactionalId): <code>UnsignedVarint() - 1</code></li>
+<li>if length &gt; 0 | <code>transactionalId</code>: <code>String(length)</code></li>
+<li><code>ack</code>: <code>short</code></li>
+<li><code>timeoutMs</code>: <code>int</code></li>
+<li>Topics[Array] | <code>arrayLength</code>: <code>UnsignedVarint() - 1</code> | for 循环 <ul>
+<li><code>length</code>(name): <code>UnsignedVarint() - 1</code></li>
+<li>if length &gt; 0 | name: <code>String(length)</code></li>
+<li>Partitions[Array] | <code>arrayLength</code>: <code>UnsignedVarint() - 1</code> | for 循环 <ul>
+<li><code>index</code>: <code>int</code></li>
+<li><code>length</code>(records): <code>UnsignedVarint() - 1</code></li>
+<li>if length &gt; 0 | <code>records</code>: <code>MemoryRecords(bytes[length])</code></li>
+<li><code>_unknownTaggedFields</code>[Map]…</li>
+</ul>
+</li>
+<li><code>_unknownTaggedFields</code>[Map]…</li>
+</ul>
+</li>
+<li><code>_unknownTaggedFields</code>[Map] | <code>_numTaggedFields</code>: <code>UnsignedVarint()</code> | for 循环 <ul>
+<li>_tag: <code>UnsignedVarint()</code></li>
+<li>_size: <code>UnsignedVarint()</code></li>
+<li><code>List&lt;RawTaggedField&gt;</code>: bytes[size]</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p><img src="/images/kafka_producer/image_13.png" alt="image.png"></p>
+<h3 id="Records"><a href="#Records" class="headerlink" title="Records"></a>Records</h3><ul>
+<li>由 <code>ProduceRecord</code> 转换到 bytes 是在 <code>KafkaProdcer#doSend</code> 中经过序列化借由部分中间传递到 <code>MemoryRecordsBuilder#appendDefaultRecord</code> 成型 <ul>
+<li>timestamp: send 的时间</li>
+<li>offset: <code>MemoryRecordsBuild#lastOffset</code> 相对索引</li>
+</ul>
+</li>
+<li>BatchHeader: 在消息构建的时候需要注意的是，由 <code>ProducerBatch#records()</code> → <code>MemoryRecordsBuilder#build</code> → <code>MemoryRecordsBuilder#close</code> → <code>MemoryRecordsBuilder#writeDefaultBatchHeader</code> 流程中会先将统一 header 放入 bytes 中，然后再将 records 放入 bytes 中。所以整体结构是这样的。</li>
+</ul>
+<p><img src="/images/kafka_producer/image_14.png" alt="image.png"><br>这里面大量采用了 VarInt&#x2F;Long 来在小数字或者负数的情况下节省字节，这个也是 protobuf 常用手段，可以参考这篇文章：<a target="_blank" rel="noopener" href="https://segmentfault.com/a/1190000020500985">https://segmentfault.com/a/1190000020500985</a> 对于编码有详细的介绍。</p>
+<ul>
+<li><strong>RecordBatch 字段介绍</strong> <ul>
+<li>baseOffset: 基准 offset，Producer 始终为 0，Customer 消费的时候以 <code>LogSegment</code> 的 baseOffset 为准</li>
+<li>sizeInBytes: 计算从 partition leader epoch 字段开始到末尾的长度</li>
+<li>partitionLeaderEpoch: 分区 leader 版本号（更新次数）</li>
+<li>magic: 表示消息格式版本</li>
+<li>attributes: 消息属性，低三位表示压缩格式（NONE: 0, GZIP: 1, SNAPPY: 2 LZ4: 3，其余位保留）;第四位表示时间戳类型（）;第五位表示次 RecordBatch 是否处于事务中(0 表示非事务，1 表示事务)；第六位表示是否是控制消息（0表示非，1 表示是。控制消息用来支持事务功能）；第八位表示该消息是否被删除(Kafka 2.5.0 在 <a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-534%3A+Retain+tombstones+and+transaction+markers+for+approximately+delete.retention.ms+milliseconds">KIP-534</a> 加入的特性)。</li>
+<li>firstTimestamp: 首个消息的 timestamp</li>
+<li>maxTimestamp: RecordBatch 最大的时间错，一般就是最后一个，用来保证消息组装的正确性</li>
+<li>lastOffsetDelta: RecordBatch 中最优一个 Record 的 offset 与 first offset 的差值，主要被 broker 用来确保 RecordBatch 中 Record 组装的正确性。</li>
+<li>producerId: PID，用来支持幂等和事务</li>
+<li>epoch: 和 PID 相同，用来支持幂等和事务</li>
+<li>sequence: 和 PID 相同，用来支持幂等和事务</li>
+<li>numRecords: records 的个数</li>
+<li>crc: crc32 校验值，范围覆盖了 attributes 到 records</li>
+<li>records: 消息主体</li>
+</ul>
+</li>
+<li><strong>Record 介绍</strong> <ul>
+<li>sizeInBytes: 消息总长度</li>
+<li>attribute: 启用，保留值</li>
+<li>timestampDelta: 时间戳增量，相对于外部 firstTimestamp</li>
+<li>offsetDelta: offset 增值，相对于 baseOffset</li>
+<li>key length &amp; key: key 值，如果是空 value &#x3D; -1</li>
+<li>value length &amp; value: value 值</li>
+<li>headers length &amp; header: headers</li>
+</ul>
+</li>
+<li><strong>RecordHeader 介绍</strong></li>
+</ul>
+<h2 id="索引文件与日志文件映射关系"><a href="#索引文件与日志文件映射关系" class="headerlink" title="索引文件与日志文件映射关系"></a>索引文件与日志文件映射关系</h2><ul>
+<li><p>Kafka 的索引文件是以稀疏索引（sparse index）的方式构造消息的索引，它<strong>并不保证每个消息在索引文件中都有对应的索引项</strong>。每当写入一定量（由 broker 参数 <code>log.index.interval.bytes</code> 决定，默认值为 4096）的消息时，偏移量索引文件和时间戳索引文件分别增加一个偏移量索引项和时间错索引项。 </p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (bytesSinceLastIndexEntry &gt; indexIntervalBytes) &#123;</span><br><span class="line">    offsetIndex.append(largestOffset, physicalPosition)</span><br><span class="line">    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar)</span><br><span class="line">    bytesSinceLastIndexEntry = <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+<li><p>offsetIndex 与 log 文件代表的是 offset (RecordBatch 最大的 offset 的相对偏移量)与对应消息的 log 物理位置映射关系(largestOffset → physicalPosition) </p>
+</li>
+<li><p>timeIndex 是当前日志分段的最大时间戳和时间戳锁对应的消息相对偏移量。即如果此次的消息时间戳小于之前追加的时间戳则不予追加，<strong>这实际是一个保证 customer 通过 timestamp 来消费的话能稳定消费到在这个 timestamp 后续追加的消息的手段，假设 Producer 出现时间跳动则 customer 在消费的时候也可以跳过之前的消息消费到最新的消息。</strong></p>
+</li>
+</ul>
+
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
 
     
 
@@ -194,7 +937,7 @@
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2023-12-23 18:33:47" itemprop="dateModified" datetime="2023-12-23T18:33:47+08:00">2023-12-23</time>
+      <time title="Modified: 2023-12-23 19:55:15" itemprop="dateModified" datetime="2023-12-23T19:55:15+08:00">2023-12-23</time>
     </span>
 
   
@@ -724,406 +1467,8 @@
 
 
 
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2018/01/30/%E5%85%B3%E4%BA%8E-asyncio-%E7%9A%84%E5%96%83%E5%96%83%E8%87%AA%E8%AF%AD/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="刘冰鉴">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="村里最好的博客">
-      <meta itemprop="description" content="Res severa est verum gaudium.">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | 村里最好的博客">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2018/01/30/%E5%85%B3%E4%BA%8E-asyncio-%E7%9A%84%E5%96%83%E5%96%83%E8%87%AA%E8%AF%AD/" class="post-title-link" itemprop="url">关于 asyncio 的喃喃自语</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">Posted on</span>
-
-      <time title="Created: 2018-01-30 00:22:04" itemprop="dateCreated datePublished" datetime="2018-01-30T00:22:04+08:00">2018-01-30</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2023-12-23 12:03:46" itemprop="dateModified" datetime="2023-12-23T12:03:46+08:00">2023-12-23</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">In</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/%E5%B7%A5%E5%85%B7/" itemprop="url" rel="index"><span itemprop="name">工具</span></a>
-        </span>
-    </span>
-
-  
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <p>大多数东西都是根据之前学习中的印象而来，这篇文章更多的是喃喃自语吧。</p>
-<h3 id="协程"><a href="#协程" class="headerlink" title="协程"></a>协程</h3><p>在 Python 3.5 之前，协程在我眼中应该就是 <code>yield</code> 这个语法的同义，通过 <code>send</code>、<code>throw</code> 等方法来作为其交互，用于多进程中以提升效率，然而就 Python 的使用环境来说，其实接触到的机会并不是太多。</p>
-<p>在 Python 3.5 之后，给了一种新的，现在看起来还是比较友好的选择</p>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">hello</span>():</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;Hello world!&quot;</span>)</span><br><span class="line">    <span class="comment"># asyncio.sleep 也是一个 coroutine</span></span><br><span class="line">    <span class="comment"># 异步调用asyncio.sleep(1):</span></span><br><span class="line">    <span class="comment"># 线程也可以从这儿拿到返回值（asyncio.sleep(1) 返回值为 None）</span></span><br><span class="line">    r = <span class="keyword">await</span> asyncio.sleep(<span class="number">1</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;Hello again!&quot;</span>)</span><br></pre></td></tr></table></figure>
-
-<p>在 <code>I/O</code> 密集的地方，填入 <code>await</code> ，在 <code>def</code> 前面加上 <code>async</code>，不需要去适应至今让我还是十分不适的 <code>yield</code> &#x2F; <code>yield from</code> </p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2018/01/30/%E5%85%B3%E4%BA%8E-asyncio-%E7%9A%84%E5%96%83%E5%96%83%E8%87%AA%E8%AF%AD/#more" rel="contents">
-                Read more &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2017/12/24/Kafka%E7%94%9F%E4%BA%A7%E8%80%85%E5%88%86%E6%9E%90%E2%80%94%E2%80%94RecordAccumulator/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="刘冰鉴">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="村里最好的博客">
-      <meta itemprop="description" content="Res severa est verum gaudium.">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | 村里最好的博客">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2017/12/24/Kafka%E7%94%9F%E4%BA%A7%E8%80%85%E5%88%86%E6%9E%90%E2%80%94%E2%80%94RecordAccumulator/" class="post-title-link" itemprop="url">Kafka生产者分析——RecordAccumulator</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">Posted on</span>
-
-      <time title="Created: 2017-12-24 19:38:31" itemprop="dateCreated datePublished" datetime="2017-12-24T19:38:31+08:00">2017-12-24</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2023-12-23 12:03:46" itemprop="dateModified" datetime="2023-12-23T12:03:46+08:00">2023-12-23</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">In</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" itemprop="url" rel="index"><span itemprop="name">源码分析</span></a>
-        </span>
-    </span>
-
-  
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <blockquote>
-<p> 紧接 <a target="_blank" rel="noopener" href="https://binglau7.github.io/2017/12/18/Kafka%E7%94%9F%E4%BA%A7%E8%80%85%E5%88%86%E6%9E%90%E2%80%94%E2%80%94KafkaProducer/">Kafka生产者分析——KafkaProducer</a></p>
-</blockquote>
-<p>前文介绍过，KafkaProducer 可以有同步和异步两种方式发送消息，其实两者的底层实现相同，都是通过异步方式实现的。主线程调用 <code>KafkaProducer#send()</code> 方法发送消息的时候，先将消息放到 <code>RecordAccumulator</code> 中暂存，然后主线程就可以从 <code>send()</code> 方法中返回了，此时消息并没有真正地发送给 Kafka，而是缓存在了 <code>RecordAccumulator</code> 中。之后，业务线程<strong>通过 <code>KafkaProducer#send()</code> 方法不断向 <code>RecordAccumulator</code> 追加消息，当达到一定的条件，会唤醒 <code>Sender</code> 线程发送 <code>RecordAccumulator</code> 中的消息。</strong></p>
-<p>下面我们就来介绍 <code>RecordAccumulator</code> 的结构。首先需要注意的是，**<code>RecordAccumulator</code> 至少有一个业务线程和一个 <code>Sender</code> 线程并发操作，所以必须是线程安全的**。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2017/12/24/Kafka%E7%94%9F%E4%BA%A7%E8%80%85%E5%88%86%E6%9E%90%E2%80%94%E2%80%94RecordAccumulator/#more" rel="contents">
-                Read more &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2017/12/18/Spring%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-AOP/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="刘冰鉴">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="村里最好的博客">
-      <meta itemprop="description" content="Res severa est verum gaudium.">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | 村里最好的博客">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2017/12/18/Spring%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-AOP/" class="post-title-link" itemprop="url">Spring源码分析-AOP</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">Posted on</span>
-
-      <time title="Created: 2017-12-18 22:28:01" itemprop="dateCreated datePublished" datetime="2017-12-18T22:28:01+08:00">2017-12-18</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2023-12-23 12:03:46" itemprop="dateModified" datetime="2023-12-23T12:03:46+08:00">2023-12-23</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">In</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" itemprop="url" rel="index"><span itemprop="name">源码分析</span></a>
-        </span>
-    </span>
-
-  
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <h2 id="动态-AOP-使用示例"><a href="#动态-AOP-使用示例" class="headerlink" title="动态 AOP 使用示例"></a>动态 AOP 使用示例</h2><ol>
-<li><p>创建用于拦截的 bean</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Data</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">TestBean</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="type">String</span> <span class="variable">testStr</span> <span class="operator">=</span> <span class="string">&quot;test&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">test</span><span class="params">()</span> &#123;</span><br><span class="line">        System.out.println(<span class="string">&quot;test&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>创建 Advisor</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Aspect</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">AspectJTest</span> &#123;</span><br><span class="line">    <span class="meta">@Pointcut(&quot;execution(* *.test(..))&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">test</span><span class="params">()</span> &#123;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Before(&quot;test()&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">beforeTest</span><span class="params">()</span> &#123;</span><br><span class="line">        System.out.println(<span class="string">&quot;beforeTest&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@After(&quot;test()&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">afterTest</span><span class="params">()</span> &#123;</span><br><span class="line">        System.out.println(<span class="string">&quot;afterTest&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Around(&quot;test()&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> Object <span class="title function_">aroundTest</span><span class="params">(ProceedingJoinPoint p)</span> &#123;</span><br><span class="line">        System.out.println(<span class="string">&quot;brfore around&quot;</span>);</span><br><span class="line">        <span class="type">Object</span> <span class="variable">o</span> <span class="operator">=</span> <span class="literal">null</span>;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            o = p.proceed();</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Throwable e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">        System.out.println(<span class="string">&quot;after around&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> o;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>创建配置文件</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">aop:aspectj-autoproxy</span> /&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">bean</span> <span class="attr">id</span>=<span class="string">&quot;testBean&quot;</span> <span class="attr">class</span>=<span class="string">&quot;io.github.binglau.bean.TestBean&quot;</span> /&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">bean</span> <span class="attr">class</span>=<span class="string">&quot;io.github.binglau.AspectJTest&quot;</span> /&gt;</span></span><br></pre></td></tr></table></figure>
-</li>
-<li><p>测试</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Test</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">testAop</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="type">ApplicationContext</span> <span class="variable">ctx</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ClassPathXmlApplicationContext</span>(<span class="string">&quot;beanFactory.xml&quot;</span>);</span><br><span class="line">    <span class="type">TestBean</span> <span class="variable">bean</span> <span class="operator">=</span> (TestBean) ctx.getBean(<span class="string">&quot;testBean&quot;</span>);</span><br><span class="line">    bean.test();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>不出意外结果</p>
-<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">brfore around</span><br><span class="line">beforeTest</span><br><span class="line">test</span><br><span class="line">after around</span><br><span class="line">afterTest</span><br></pre></td></tr></table></figure></li>
-</ol>
-<p>可知 <code>&lt;aop:aspectj-autoproxy /&gt;</code> 是开启 aop 的关键，我们不妨由此入手。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2017/12/18/Spring%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-AOP/#more" rel="contents">
-                Read more &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2017/12/18/Kafka%E7%94%9F%E4%BA%A7%E8%80%85%E5%88%86%E6%9E%90%E2%80%94%E2%80%94KafkaProducer/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="刘冰鉴">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="村里最好的博客">
-      <meta itemprop="description" content="Res severa est verum gaudium.">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | 村里最好的博客">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2017/12/18/Kafka%E7%94%9F%E4%BA%A7%E8%80%85%E5%88%86%E6%9E%90%E2%80%94%E2%80%94KafkaProducer/" class="post-title-link" itemprop="url">Kafka生产者分析——KafkaProducer</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">Posted on</span>
-
-      <time title="Created: 2017-12-18 22:15:26" itemprop="dateCreated datePublished" datetime="2017-12-18T22:15:26+08:00">2017-12-18</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2023-12-23 12:03:46" itemprop="dateModified" datetime="2023-12-23T12:03:46+08:00">2023-12-23</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">In</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" itemprop="url" rel="index"><span itemprop="name">源码分析</span></a>
-        </span>
-    </span>
-
-  
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <blockquote>
-<p> 文章参考自《Apache  Kafka 源码剖析》</p>
-<p> github 地址：<a target="_blank" rel="noopener" href="https://github.com/BingLau7/kafka%EF%BC%8C%E9%87%8C%E9%9D%A2%E6%9C%89%E4%BB%A3%E7%A0%81%E7%9A%84%E7%9B%B8%E5%85%B3%E6%B3%A8%E9%87%8A">https://github.com/BingLau7/kafka，里面有代码的相关注释</a></p>
-<p> 具体部署方式不进行指导了，网上资料比较多</p>
-</blockquote>
-<h2 id="KafkaProducer-Demo"><a href="#KafkaProducer-Demo" class="headerlink" title="KafkaProducer Demo"></a>KafkaProducer Demo</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ProducerDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        <span class="type">boolean</span> <span class="variable">isAsync</span> <span class="operator">=</span> args.length == <span class="number">0</span> ||</span><br><span class="line">                <span class="comment">/* 消息的发送方式：异步发送还是同步发送 */</span></span><br><span class="line">                !args[<span class="number">0</span>].trim().equalsIgnoreCase(<span class="string">&quot;sync&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="type">Properties</span> <span class="variable">props</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Properties</span>();</span><br><span class="line">        props.put(<span class="string">&quot;bootstrap.servers&quot;</span>, <span class="string">&quot;localhost:9092&quot;</span>);</span><br><span class="line">        <span class="comment">/* 客户端的 ID */</span></span><br><span class="line">        props.put(<span class="string">&quot;client.id&quot;</span>, <span class="string">&quot;DemoProducer&quot;</span>);</span><br><span class="line">        <span class="comment">/*</span></span><br><span class="line"><span class="comment">        * 消息的 key 和 value 都是字节数组，为了将 Java 对象转化为字节数组，可以配置</span></span><br><span class="line"><span class="comment">        * &quot;key.serializer&quot; 和 &quot;value.serializer&quot; 两个序列化器，完成转化</span></span><br><span class="line"><span class="comment">        */</span></span><br><span class="line">        props.put(<span class="string">&quot;key.serializer&quot;</span>, <span class="string">&quot;org.apache.kafka.common.serialization.IntegerSerializer&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* StringSerializer 用来将 String 对象序列化成字节数组 */</span></span><br><span class="line">        props.put(<span class="string">&quot;value.serializer&quot;</span>, <span class="string">&quot;org.apache.kafka.common.serialization.StringSerializer&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* 生产者的核心类 */</span></span><br><span class="line">        <span class="type">KafkaProducer</span> <span class="variable">producer</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">KafkaProducer</span>&lt;&gt;(props);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* 向指定的 test 这个 topic 发送消息 */</span></span><br><span class="line">        <span class="type">String</span> <span class="variable">topic</span> <span class="operator">=</span> <span class="string">&quot;test&quot;</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* 消息的 key */</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">messageNo</span> <span class="operator">=</span> <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">            <span class="type">String</span> <span class="variable">messageStr</span> <span class="operator">=</span> <span class="string">&quot;Message_&quot;</span> + messageNo;</span><br><span class="line">            <span class="type">long</span> <span class="variable">startTime</span> <span class="operator">=</span> System.currentTimeMillis();</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> (isAsync) &#123; <span class="comment">/* 异步发送消息 */</span></span><br><span class="line">                <span class="comment">/*</span></span><br><span class="line"><span class="comment">                *  第一个参数是 ProducerRecord 类型的对象，封装了目标 Topic，消息的 kv</span></span><br><span class="line"><span class="comment">                *  第二个参数是一个 CallBack 对象，当生产者接收到 Kafka 发来的 ACK 确认消息的时候，</span></span><br><span class="line"><span class="comment">                *  会调用此 CallBack 对象的 onCompletion() 方法，实现回调功能</span></span><br><span class="line"><span class="comment">                */</span></span><br><span class="line">                producer.send(<span class="keyword">new</span> <span class="title class_">ProducerRecord</span>&lt;&gt;(topic, messageNo, messageStr),</span><br><span class="line">                        <span class="keyword">new</span> <span class="title class_">DemoCallBack</span>(startTime, messageNo, messageStr));</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123; <span class="comment">/* 同步发送消息 */</span></span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    <span class="comment">/*</span></span><br><span class="line"><span class="comment">                    * KafkaProducer.send() 方法的返回值类型是 Future&lt;RecordMetadata&gt;</span></span><br><span class="line"><span class="comment">                    * 这里通过 Future.get 方法，阻塞当前线程，等待 Kafka 服务端的 ACK 响应</span></span><br><span class="line"><span class="comment">                    */</span></span><br><span class="line">                    producer.send(<span class="keyword">new</span> <span class="title class_">ProducerRecord</span>&lt;&gt;(topic, messageNo, messageStr)).get();</span><br><span class="line">                    System.out.printf(<span class="string">&quot;Send message: (%d, %s)\n&quot;</span>, messageNo, messageStr);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException | ExecutionException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="comment">/* 递增消息的 key */</span></span><br><span class="line">            ++messageNo;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">DemoCallBack</span> <span class="keyword">implements</span> <span class="title class_">Callback</span> &#123;</span><br><span class="line">    <span class="comment">/* 开始发送消息的时间戳 */</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="type">long</span> startTime;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="type">int</span> key;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> String message;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="title function_">DemoCallBack</span><span class="params">(<span class="type">long</span> startTime, <span class="type">int</span> key, String message)</span> &#123;</span><br><span class="line">        <span class="built_in">this</span>.startTime = startTime;</span><br><span class="line">        <span class="built_in">this</span>.key = key;</span><br><span class="line">        <span class="built_in">this</span>.message = message;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 生产者成功发送消息，收到 Kafka 服务端发来的 ACK 确认消息后，会调用此回调函数</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> metadata 生产者发送的消息的元数据，如果发送过程中出现异常，此参数为 null</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> exception 发送过程中出现的异常，如果发送成功为 null</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">onCompletion</span><span class="params">(RecordMetadata metadata, Exception exception)</span> &#123;</span><br><span class="line">        <span class="type">long</span> <span class="variable">elapsedTime</span> <span class="operator">=</span> System.currentTimeMillis() - startTime;</span><br><span class="line">        <span class="keyword">if</span> (metadata != <span class="literal">null</span>) &#123;</span><br><span class="line">            System.out.printf(<span class="string">&quot;message: (%d, %s) send to partition %d, offset: %d, in %d\n&quot;</span>,</span><br><span class="line">                    key, message, metadata.partition(), metadata.offset(), elapsedTime);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            exception.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2017/12/18/Kafka%E7%94%9F%E4%BA%A7%E8%80%85%E5%88%86%E6%9E%90%E2%80%94%E2%80%94KafkaProducer/#more" rel="contents">
-                Read more &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
   <nav class="pagination">
-    <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><span class="space">&hellip;</span><a class="page-number" href="/page/5/">5</a><a class="extend next" rel="next" title="Next page" aria-label="Next page" href="/page/2/"><i class="fa fa-angle-right"></i></a>
+    <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><span class="space">&hellip;</span><a class="page-number" href="/page/6/">6</a><a class="extend next" rel="next" title="Next page" aria-label="Next page" href="/page/2/"><i class="fa fa-angle-right"></i></a>
   </nav>
 
 </div>
