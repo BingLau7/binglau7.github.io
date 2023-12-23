@@ -38,7 +38,7 @@
 <meta property="og:image" content="http://example.com/images/arthas/image_10.png">
 <meta property="og:image" content="http://example.com/images/arthas/image_11.png">
 <meta property="article:published_time" content="2022-04-18T15:14:54.000Z">
-<meta property="article:modified_time" content="2023-12-23T12:26:29.980Z">
+<meta property="article:modified_time" content="2023-12-23T12:31:26.404Z">
 <meta property="article:author" content="刘冰鉴">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://example.com/images/arthas/image_1.png">
@@ -210,7 +210,7 @@
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2023-12-23 20:26:29" itemprop="dateModified" datetime="2023-12-23T20:26:29+08:00">2023-12-23</time>
+      <time title="Modified: 2023-12-23 20:31:26" itemprop="dateModified" datetime="2023-12-23T20:31:26+08:00">2023-12-23</time>
     </span>
 
   
@@ -223,6 +223,9 @@
     
     
     <div class="post-body" itemprop="articleBody"><h2 id="结构"><a href="#结构" class="headerlink" title="结构"></a>结构</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">├── agent							[ClassLoader/代理启动]</span><br><span class="line">├── arthas-agent-attach				[Agent Attach?]</span><br><span class="line">├── arthas-spring-boot-starter		[针对 spring boot-<span class="number">2</span> 提供的自动集成技能]</span><br><span class="line">├── arthas-vmtool					[JVM 工具模块]</span><br><span class="line">├── <span class="keyword">async</span>-profiler					[profiler 的 so 文件]</span><br><span class="line">├── bin								[shell 脚本]</span><br><span class="line">├── boot							[启动模块]</span><br><span class="line">├── client							[client 模块]</span><br><span class="line">├── common							[通用模块]</span><br><span class="line">├── core							[核心功能模块]</span><br><span class="line">├── demo							[demo 展示]</span><br><span class="line">├── lib								[arthas jni]</span><br><span class="line">├── math-game						[demo]</span><br><span class="line">├── memorycompiler					[动态编译模块]</span><br><span class="line">├── packaging						[打包专用]</span><br><span class="line">├── site							[arthas 官网信息]</span><br><span class="line">├── spy								[定义 <span class="title function_ invoke__">SPI</span>(方法执行前后插入点)]</span><br><span class="line">├── testcase						[测试 case]</span><br><span class="line">├── tunnel-client					[tunnel-client/server 均是为了提供管理多个 arthas 的能力]</span><br><span class="line">├── tunnel-common</span><br><span class="line">├── tunnel-server</span><br><span class="line">└── tutorials</span><br></pre></td></tr></table></figure>
+
+<span id="more"></span>
+
 <h2 id="Attach-背景知识"><a href="#Attach-背景知识" class="headerlink" title="Attach 背景知识"></a>Attach 背景知识</h2><p>参考：</p>
 <ul>
 <li><a target="_blank" rel="noopener" href="https://www.baeldung.com/java-instrumentation">Guide to Java Instrumentation</a></li>

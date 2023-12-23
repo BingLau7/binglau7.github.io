@@ -19,16 +19,16 @@
 
 <script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Muse","darkmode":false,"version":"8.19.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js"></script>
 
-    <meta name="description" content="介绍本文的起因是在工作中到 Kafka 的使用最广泛、性能要求最高、问题最多的组件。而其中性能问题的调优思路往往与 Kafka 的攒批息息相关。所以这篇文章中会一起学习 Kafka 攒批原理及如何使用 Kafka 的攒批。 什么是攒批？发送消息（Record）时，让消息在内存中驻留一段时间，等待多个消息同时达到可发送状态时，形成一次 Request 发送到 Server 中。 为什么需要攒批？ 默">
+    <meta name="description" content="介绍本文的起因是在工作中到 Kafka 的使用最广泛、性能要求最高、问题最多的组件。而其中性能问题的调优思路往往与 Kafka 的攒批息息相关。所以这篇文章中会一起学习 Kafka 攒批原理及如何使用 Kafka 的攒批。">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Kafka 的攒批机制">
 <meta property="og:url" content="http://example.com/2022/02/23/Kafka-%E7%9A%84%E6%94%92%E6%89%B9%E6%9C%BA%E5%88%B6/index.html">
 <meta property="og:site_name" content="村里最好的博客">
-<meta property="og:description" content="介绍本文的起因是在工作中到 Kafka 的使用最广泛、性能要求最高、问题最多的组件。而其中性能问题的调优思路往往与 Kafka 的攒批息息相关。所以这篇文章中会一起学习 Kafka 攒批原理及如何使用 Kafka 的攒批。 什么是攒批？发送消息（Record）时，让消息在内存中驻留一段时间，等待多个消息同时达到可发送状态时，形成一次 Request 发送到 Server 中。 为什么需要攒批？ 默">
+<meta property="og:description" content="介绍本文的起因是在工作中到 Kafka 的使用最广泛、性能要求最高、问题最多的组件。而其中性能问题的调优思路往往与 Kafka 的攒批息息相关。所以这篇文章中会一起学习 Kafka 攒批原理及如何使用 Kafka 的攒批。">
 <meta property="og:locale">
 <meta property="og:image" content="http://example.com/images/kafka-batch/image_1.png">
 <meta property="article:published_time" content="2022-02-23T11:50:39.000Z">
-<meta property="article:modified_time" content="2023-12-23T12:30:06.865Z">
+<meta property="article:modified_time" content="2023-12-23T12:31:40.600Z">
 <meta property="article:author" content="刘冰鉴">
 <meta property="article:tag" content="Kafka">
 <meta name="twitter:card" content="summary">
@@ -201,7 +201,7 @@
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2023-12-23 20:30:06" itemprop="dateModified" datetime="2023-12-23T20:30:06+08:00">2023-12-23</time>
+      <time title="Modified: 2023-12-23 20:31:40" itemprop="dateModified" datetime="2023-12-23T20:31:40+08:00">2023-12-23</time>
     </span>
 
   
@@ -214,6 +214,8 @@
     
     
     <div class="post-body" itemprop="articleBody"><h2 id="介绍"><a href="#介绍" class="headerlink" title="介绍"></a>介绍</h2><p>本文的起因是在工作中到 Kafka 的使用<strong>最广泛、性能要求最高、问题最多的组件</strong>。而其中性能问题的<strong>调优思路往往与 Kafka 的攒批息息相关</strong>。所以这篇文章中会一起学习 Kafka 攒批原理及如何使用 Kafka 的攒批。</p>
+<span id="more"></span>
+
 <h3 id="什么是攒批？"><a href="#什么是攒批？" class="headerlink" title="什么是攒批？"></a>什么是攒批？</h3><p>发送消息（Record）时，让消息在<strong>内存中</strong>驻留一段时间，等待多个消息同时达到可发送状态时，形成一次 Request 发送到 Server 中。</p>
 <h3 id="为什么需要攒批？"><a href="#为什么需要攒批？" class="headerlink" title="为什么需要攒批？"></a>为什么需要攒批？</h3><ul>
 <li>默认网络发送成本大于内存中流转成本。使用攒批可以极大提升吞吐量。</li>
