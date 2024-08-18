@@ -19,16 +19,16 @@
 
 <script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Muse","darkmode":false,"version":"8.19.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js"></script>
 
-    <meta name="description" content="本篇文章主要目的是在工作和学习过中对于 Flink Source 的一些使用和学习的理解记录。 主要的概念介绍关系介绍 API   类名 用途 示例    Source&lt;T, Split, EnumChk&gt; Flink 的 Source 工具类  1. 负载创建 SplitEnumerator 与 SourceReader 这两个 Source 关键类;   2. 提供了创建 Spli">
+    <meta name="description" content="本篇文章主要目的是在工作和学习过中对于 Flink Source 的一些使用和学习的理解记录。">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Flink-Source Connector 的一些概念理解">
 <meta property="og:url" content="http://example.com/2024/08/18/Flink-Source-Connector-%E7%9A%84%E4%B8%80%E4%BA%9B%E6%A6%82%E5%BF%B5%E7%90%86%E8%A7%A3/index.html">
 <meta property="og:site_name" content="村里最好的博客">
-<meta property="og:description" content="本篇文章主要目的是在工作和学习过中对于 Flink Source 的一些使用和学习的理解记录。 主要的概念介绍关系介绍 API   类名 用途 示例    Source&lt;T, Split, EnumChk&gt; Flink 的 Source 工具类  1. 负载创建 SplitEnumerator 与 SourceReader 这两个 Source 关键类;   2. 提供了创建 Spli">
+<meta property="og:description" content="本篇文章主要目的是在工作和学习过中对于 Flink Source 的一些使用和学习的理解记录。">
 <meta property="og:locale">
 <meta property="og:image" content="http://example.com/images/flink/flink-source-1.svg">
 <meta property="article:published_time" content="2024-08-18T09:29:27.000Z">
-<meta property="article:modified_time" content="2024-08-18T09:41:45.766Z">
+<meta property="article:modified_time" content="2024-08-18T09:42:52.049Z">
 <meta property="article:author" content="刘冰鉴">
 <meta property="article:tag" content="Flink">
 <meta name="twitter:card" content="summary">
@@ -195,7 +195,7 @@
       <span class="post-meta-item-text">Posted on</span>
       
 
-      <time title="Created: 2024-08-18 17:29:27 / Modified: 17:41:45" itemprop="dateCreated datePublished" datetime="2024-08-18T17:29:27+08:00">2024-08-18</time>
+      <time title="Created: 2024-08-18 17:29:27 / Modified: 17:42:52" itemprop="dateCreated datePublished" datetime="2024-08-18T17:29:27+08:00">2024-08-18</time>
     </span>
 
   
@@ -208,6 +208,8 @@
     
     
     <div class="post-body" itemprop="articleBody"><p>本篇文章主要目的是在工作和学习过中对于 Flink Source 的一些使用和学习的理解记录。</p>
+<span id="more"></span>
+
 <h2 id="主要的概念介绍"><a href="#主要的概念介绍" class="headerlink" title="主要的概念介绍"></a>主要的概念介绍</h2><h3 id="关系介绍"><a href="#关系介绍" class="headerlink" title="关系介绍"></a>关系介绍</h3><p><img src="/images/flink/flink-source-1.svg"></p>
 <h3 id="API"><a href="#API" class="headerlink" title="API"></a>API</h3><table>
 <thead>
