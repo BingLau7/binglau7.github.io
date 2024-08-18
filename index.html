@@ -188,7 +188,7 @@
       <span class="post-meta-item-text">Posted on</span>
       
 
-      <time title="Created: 2024-08-18 17:29:27 / Modified: 17:35:18" itemprop="dateCreated datePublished" datetime="2024-08-18T17:29:27+08:00">2024-08-18</time>
+      <time title="Created: 2024-08-18 17:29:27 / Modified: 17:41:45" itemprop="dateCreated datePublished" datetime="2024-08-18T17:29:27+08:00">2024-08-18</time>
     </span>
 
   
@@ -213,26 +213,25 @@
 </thead>
 <tbody><tr>
 <td><code>Source&lt;T, Split, EnumChk&gt;</code></td>
-<td>Flink 的 Source 工具类</td>
-<td></td>
+<td>Flink 的 Source 工具类 <br> 1. 负载创建 SplitEnumerator 与 SourceReader 这两个 Source 关键类; <br>  2. 提供了创建 Split 与 EnumChk 的序列化和反序列化器的接口; <br>  3. 提供是不是有界的标识</td>
+<td>KafkaSource 的实现<br>  1. 创建 KafkaSourceEnumerator 与 KafkaSourceReader <br>  2. 提供 KafkaPartitionSplitSerializer 与 KafkaSourceEnumStateSerializer <br> 3. 在创建 KafkaSource 确定是否是有界的(配置项)</td>
+</tr>
+<tr>
+<td><code>SplitEnumerator&lt;Split, EnumChk&gt;</code></td>
+<td>Flink 为 Source 区分了切片（Split）和根据切片读取数据的两个主要组件。SplitEnumerator 就是生产切片的生产者。<br>  1. 负责生产切片，以及分配切片到 Reader 中 <br> 2. 可以理解成分布式系统中的控制节点，在 Flink 中的 JobManager 中运行或者在单个 TaskManager 中运行，不会在多台机器中同时运行。</td>
+<td>KafkaSource 的实现 KafkaSourceEnumerator <br>  负责动态地发现和分配 Kafka 分区（TopicPartitions）给 Source 任务（Reader）。</td>
+</tr>
+<tr>
+<td><code>SourceReader&lt;T, SplitT&gt;</code></td>
+<td>Flink 用于读取切片，生产数据的组件 <br> 1. 负载接受 Split 然后生产出 T(消息泛型) <br>  2. 可以在多个 TaskManager 中运行</td>
+<td>KafkaSourceReader 基于 Base 实现，读取 partition 的数据</td>
+</tr>
+<tr>
+<td><code>SimpleVersionedSerializer</code></td>
+<td>Flink 中对于 Split 与 EnumChk 需要提供序列化和反序列化的能力 <br>  - Split 的序列化主要是用于 SplitEnumerator 与 SourceReader。同时用于 SourceReader 的 Snapshot 序列化 <br> - EnumChk 用于 Checkpoint 的持久化</td>
+<td>Kafka 的 KafkaPartitionSplitSerializer 与 KafkaSourceEnumStateSerializer</td>
 </tr>
 </tbody></table>
-<ol>
-<li>负载创建 SplitEnumerator 与 SourceReader 这两个 Source 关键类</li>
-<li>提供了创建 Split 与 EnumChk 的序列化和反序列化器的接口</li>
-<li>提供是不是有界的标识<br> | KafkaSource 的实现</li>
-<li>创建 KafkaSourceEnumerator 与 KafkaSourceReader</li>
-<li>提供 KafkaPartitionSplitSerializer 与 KafkaSourceEnumStateSerializer</li>
-<li>在创建 KafkaSource 确定是否是有界的(配置项)<br> |<br>| <code>SplitEnumerator&lt;Split, EnumChk&gt;</code> | Flink 为 Source 区分了切片（Split）和根据切片读取数据的两个主要组件。SplitEnumerator 就是生产切片的生产者。</li>
-<li>负责生产切片，以及分配切片到 Reader 中</li>
-<li>可以理解成分布式系统中的控制节点，在 Flink 中的 JobManager 中运行或者在单个 TaskManager 中运行，不会在多台机器中同时运行。<br> | KafkaSource 的实现 KafkaSourceEnumerator<br>负责动态地发现和分配 Kafka 分区（TopicPartitions）给 Source 任务（Reader）。 |<br>| <code>SourceReader&lt;T, SplitT&gt;</code> |  Flink 用于读取切片，生产数据的组件</li>
-<li>负载接受 Split 然后生产出 T(消息泛型)</li>
-<li>可以在多个 TaskManager 中运行<br> | KafkaSourceReader 基于 Base 实现，读取 partition 的数据 |<br>| <code>SimpleVersionedSerializer</code> | Flink 中对于 Split 与 EnumChk 需要提供序列化和反序列化的能力</li>
-</ol>
-<ul>
-<li>Split 的序列化主要是用于 SplitEnumerator 与 SourceReader。同时用于 SourceReader 的 Snapshot 序列化</li>
-<li>EnumChk 用于 Checkpoint 的持久化<br> | Kafka 的 KafkaPartitionSplitSerializer 与 KafkaSourceEnumStateSerializer |</li>
-</ul>
 <h3 id="API-中的泛型"><a href="#API-中的泛型" class="headerlink" title="API 中的泛型"></a>API 中的泛型</h3><table>
 <thead>
 <tr>
@@ -258,13 +257,7 @@
 <td>EnumChk</td>
 <td>表示 Checkpoint 类型</td>
 <td>SplitEnumerator</td>
-<td>Kafka 是 KafkaSourceEnumState</td>
-</tr>
-<tr>
-<td><code>Set&lt;TopicPartition&gt; assignedPartitions</code></td>
-<td></td>
-<td></td>
-<td></td>
+<td>Kafka 是 KafkaSourceEnumState <code>Set&lt;TopicPartition&gt; assignedPartitions</code></td>
 </tr>
 </tbody></table>
 <h3 id="SourceReaderBase-实现"><a href="#SourceReaderBase-实现" class="headerlink" title="SourceReaderBase 实现"></a>SourceReaderBase 实现</h3><table>
@@ -278,11 +271,6 @@
 <tbody><tr>
 <td><code>SourceReaderBase&lt;E, T, SplitT, SplitStatus&gt;</code></td>
 <td>因为 SourceReader 的高灵活性，简化了 SourceReader 的实现，定义了如何读取外部数据源（通过 SplitReader），同时通过构造方法确定了工作线程模型（<code>SplitFetcherManager</code>）。</td>
-<td></td>
-</tr>
-<tr>
-<td></td>
-<td></td>
 <td></td>
 </tr>
 <tr>
@@ -363,12 +351,7 @@
 <tr>
 <td><code>SplitReader&lt;E, Split&gt;</code></td>
 <td>读取数据和处理切片逻辑</td>
-<td>KafkaPartitionSplitReader</td>
-</tr>
-<tr>
-<td>根据 partition 读取 (startOffset, endOffset) 之间的数据</td>
-<td></td>
-<td></td>
+<td>KafkaPartitionSplitReader 根据 partition 读取 (startOffset, endOffset) 之间的数据</td>
 </tr>
 <tr>
 <td><code>RecordsWithSplits&lt;E&gt;</code></td>
