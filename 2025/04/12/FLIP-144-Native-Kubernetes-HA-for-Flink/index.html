@@ -26,11 +26,13 @@
 <meta property="og:site_name" content="村里最好的博客">
 <meta property="og:description" content="本文是基于 FLIP-144 的笔记作品，主要描述 Flink HA 基于 Kubernetes 的设计思路">
 <meta property="og:locale">
+<meta property="og:image" content="http://example.com/images/flink/flink-ha-1.png">
 <meta property="article:published_time" content="2025-04-12T03:28:11.000Z">
-<meta property="article:modified_time" content="2025-04-12T03:47:39.637Z">
+<meta property="article:modified_time" content="2025-04-12T03:52:12.099Z">
 <meta property="article:author" content="刘冰鉴">
 <meta property="article:tag" content="Flink">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/images/flink/flink-ha-1.png">
 
 
 <link rel="canonical" href="http://example.com/2025/04/12/FLIP-144-Native-Kubernetes-HA-for-Flink/">
@@ -193,7 +195,7 @@
       <span class="post-meta-item-text">Posted on</span>
       
 
-      <time title="Created: 2025-04-12 11:28:11 / Modified: 11:47:39" itemprop="dateCreated datePublished" datetime="2025-04-12T11:28:11+08:00">2025-04-12</time>
+      <time title="Created: 2025-04-12 11:28:11 / Modified: 11:52:12" itemprop="dateCreated datePublished" datetime="2025-04-12T11:28:11+08:00">2025-04-12</time>
     </span>
 
   
@@ -236,7 +238,8 @@
 <li>flink 集群中的 ConfigMap、Service、TaskManagerPod 的 owner 均是 JobManager Deployment，如果 JobManager Deployment 被销毁，则对应资源也会销毁。</li>
 <li>ConfigMap 是一个扁平架构，与 zk 层次性存储架构不同。所以存储的时候每个组件都有各自的 ConfigMap。</li>
 </ol>
-<h4 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h4><ol>
+<h4 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h4><p><img src="/images/flink/flink-ha-1.png"></p>
+<ol>
 <li>对于 Leader 选举，有一组候选 JobManagers 会参与竞选，其中某个 JobManager 选举成功，Leader-JobManager 会通过 Heatbeat 来更新自己 Leader 的位置（position）。其他所有 JobManagers 会周期性尝试选举，确保 JobManager 出现问题能快速切换。ResourceManager、JobManager、Dispatcher、RestEndpoint 都有各自的 Leader 选举服务和 ConfigMaps。</li>
 <li>活跃的 Leader 会在 ConfigMap 更新自己的地址（address），需要注意的是，我们使用相同的 ConfigMap 来竞争锁并存储 Leader address。</li>
 <li>LeaderRetrievalService 被用于查找活跃的 Leader address 并且注册自身。For Example，TaskManagers 会检索 ResourceManager 和 JobManager 来注册并提供 slot。我们会在 LeaderRetrievalService 中使用 Kubernetes Watcher，一旦 ConfigMap 内容变化，通常意味着 Leader 变更，需要获取最新 Leader 的地址。</li>
