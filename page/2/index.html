@@ -121,7 +121,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">62</span>
+          <span class="site-state-item-count">63</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
@@ -149,6 +149,89 @@
     </div>
 
     <div class="main-inner index posts-expand">
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2022/04/18/Arthas-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="刘冰鉴">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="村里最好的博客">
+      <meta itemprop="description" content="Res severa est verum gaudium.">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | 村里最好的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022/04/18/Arthas-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/" class="post-title-link" itemprop="url">Arthas 源码阅读</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+
+      <time title="Created: 2022-04-18 23:14:54" itemprop="dateCreated datePublished" datetime="2022-04-18T23:14:54+08:00">2022-04-18</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">Edited on</span>
+      <time title="Modified: 2023-12-23 20:31:26" itemprop="dateModified" datetime="2023-12-23T20:31:26+08:00">2023-12-23</time>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <h2 id="结构"><a href="#结构" class="headerlink" title="结构"></a>结构</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">├── agent							[ClassLoader/代理启动]</span><br><span class="line">├── arthas-agent-attach				[Agent Attach?]</span><br><span class="line">├── arthas-spring-boot-starter		[针对 spring boot-<span class="number">2</span> 提供的自动集成技能]</span><br><span class="line">├── arthas-vmtool					[JVM 工具模块]</span><br><span class="line">├── <span class="keyword">async</span>-profiler					[profiler 的 so 文件]</span><br><span class="line">├── bin								[shell 脚本]</span><br><span class="line">├── boot							[启动模块]</span><br><span class="line">├── client							[client 模块]</span><br><span class="line">├── common							[通用模块]</span><br><span class="line">├── core							[核心功能模块]</span><br><span class="line">├── demo							[demo 展示]</span><br><span class="line">├── lib								[arthas jni]</span><br><span class="line">├── math-game						[demo]</span><br><span class="line">├── memorycompiler					[动态编译模块]</span><br><span class="line">├── packaging						[打包专用]</span><br><span class="line">├── site							[arthas 官网信息]</span><br><span class="line">├── spy								[定义 <span class="title function_ invoke__">SPI</span>(方法执行前后插入点)]</span><br><span class="line">├── testcase						[测试 case]</span><br><span class="line">├── tunnel-client					[tunnel-client/server 均是为了提供管理多个 arthas 的能力]</span><br><span class="line">├── tunnel-common</span><br><span class="line">├── tunnel-server</span><br><span class="line">└── tutorials</span><br></pre></td></tr></table></figure>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022/04/18/Arthas-%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
 
     
 
@@ -978,102 +1061,6 @@
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2018/01/30/%E5%85%B3%E4%BA%8E-asyncio-%E7%9A%84%E5%96%83%E5%96%83%E8%87%AA%E8%AF%AD/#more" rel="contents">
-                Read more &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2017/12/24/Kafka%E7%94%9F%E4%BA%A7%E8%80%85%E5%88%86%E6%9E%90%E2%80%94%E2%80%94RecordAccumulator/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="刘冰鉴">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="村里最好的博客">
-      <meta itemprop="description" content="Res severa est verum gaudium.">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | 村里最好的博客">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2017/12/24/Kafka%E7%94%9F%E4%BA%A7%E8%80%85%E5%88%86%E6%9E%90%E2%80%94%E2%80%94RecordAccumulator/" class="post-title-link" itemprop="url">Kafka生产者分析——RecordAccumulator</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">Posted on</span>
-
-      <time title="Created: 2017-12-24 19:38:31" itemprop="dateCreated datePublished" datetime="2017-12-24T19:38:31+08:00">2017-12-24</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2023-12-23 12:03:46" itemprop="dateModified" datetime="2023-12-23T12:03:46+08:00">2023-12-23</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">In</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" itemprop="url" rel="index"><span itemprop="name">源码分析</span></a>
-        </span>
-    </span>
-
-  
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <blockquote>
-<p> 紧接 <a target="_blank" rel="noopener" href="https://binglau7.github.io/2017/12/18/Kafka%E7%94%9F%E4%BA%A7%E8%80%85%E5%88%86%E6%9E%90%E2%80%94%E2%80%94KafkaProducer/">Kafka生产者分析——KafkaProducer</a></p>
-</blockquote>
-<p>前文介绍过，KafkaProducer 可以有同步和异步两种方式发送消息，其实两者的底层实现相同，都是通过异步方式实现的。主线程调用 <code>KafkaProducer#send()</code> 方法发送消息的时候，先将消息放到 <code>RecordAccumulator</code> 中暂存，然后主线程就可以从 <code>send()</code> 方法中返回了，此时消息并没有真正地发送给 Kafka，而是缓存在了 <code>RecordAccumulator</code> 中。之后，业务线程<strong>通过 <code>KafkaProducer#send()</code> 方法不断向 <code>RecordAccumulator</code> 追加消息，当达到一定的条件，会唤醒 <code>Sender</code> 线程发送 <code>RecordAccumulator</code> 中的消息。</strong></p>
-<p>下面我们就来介绍 <code>RecordAccumulator</code> 的结构。首先需要注意的是，**<code>RecordAccumulator</code> 至少有一个业务线程和一个 <code>Sender</code> 线程并发操作，所以必须是线程安全的**。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2017/12/24/Kafka%E7%94%9F%E4%BA%A7%E8%80%85%E5%88%86%E6%9E%90%E2%80%94%E2%80%94RecordAccumulator/#more" rel="contents">
                 Read more &raquo;
               </a>
             </div>
