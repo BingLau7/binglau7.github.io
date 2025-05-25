@@ -19,16 +19,16 @@
 
 <script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Muse","darkmode":false,"version":"8.19.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js"></script>
 
-    <meta name="description" content="锁 synchronized ReentranLock ReentranReadWriteLock StampedLock  AQS(AbstractQueuedSynchronizer)锁（ReentranLock）的基础类实现，也是很多并发工具类的基础类依赖（比如 Semaphore, CountDownLatch）。 通过一个 int state 成员变量表示同步状态（如锁的持有次数），并通">
+    <meta name="description" content="锁介绍下面锁的实现逻辑  synchronized ReentranLock ReentranReadWriteLock StampedLock">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Java并发基础-锁">
 <meta property="og:url" content="http://example.com/2025/05/25/Java%E5%B9%B6%E5%8F%91%E5%9F%BA%E7%A1%80-%E9%94%81/index.html">
 <meta property="og:site_name" content="村里最好的博客">
-<meta property="og:description" content="锁 synchronized ReentranLock ReentranReadWriteLock StampedLock  AQS(AbstractQueuedSynchronizer)锁（ReentranLock）的基础类实现，也是很多并发工具类的基础类依赖（比如 Semaphore, CountDownLatch）。 通过一个 int state 成员变量表示同步状态（如锁的持有次数），并通">
+<meta property="og:description" content="锁介绍下面锁的实现逻辑  synchronized ReentranLock ReentranReadWriteLock StampedLock">
 <meta property="og:locale">
 <meta property="og:image" content="http://example.com/image/java/concurrency-lock-1.png">
 <meta property="article:published_time" content="2025-05-25T09:58:46.000Z">
-<meta property="article:modified_time" content="2025-05-25T10:15:04.698Z">
+<meta property="article:modified_time" content="2025-05-25T10:23:24.287Z">
 <meta property="article:author" content="刘冰鉴">
 <meta property="article:tag" content="Java">
 <meta name="twitter:card" content="summary">
@@ -195,7 +195,7 @@
       <span class="post-meta-item-text">Posted on</span>
       
 
-      <time title="Created: 2025-05-25 17:58:46 / Modified: 18:15:04" itemprop="dateCreated datePublished" datetime="2025-05-25T17:58:46+08:00">2025-05-25</time>
+      <time title="Created: 2025-05-25 17:58:46 / Modified: 18:23:24" itemprop="dateCreated datePublished" datetime="2025-05-25T17:58:46+08:00">2025-05-25</time>
     </span>
 
   
@@ -207,46 +207,49 @@
     
     
     
-    <div class="post-body" itemprop="articleBody"><h2 id="锁"><a href="#锁" class="headerlink" title="锁"></a>锁</h2><ul>
+    <div class="post-body" itemprop="articleBody"><h2 id="锁"><a href="#锁" class="headerlink" title="锁"></a>锁</h2><p>介绍下面锁的实现逻辑</p>
+<ul>
 <li>synchronized</li>
 <li>ReentranLock</li>
 <li>ReentranReadWriteLock</li>
 <li>StampedLock</li>
 </ul>
+<span id="more"></span>
+
 <h3 id="AQS-AbstractQueuedSynchronizer"><a href="#AQS-AbstractQueuedSynchronizer" class="headerlink" title="AQS(AbstractQueuedSynchronizer)"></a>AQS(<code>AbstractQueuedSynchronizer</code>)</h3><p>锁（ReentranLock）的基础类实现，也是很多并发工具类的基础类依赖（比如 Semaphore, CountDownLatch）。</p>
 <p>通过一个 <code>int state</code> 成员变量表示同步状态（如锁的持有次数），并通过内置的 <strong>FIFO 队列 管理等待获取资源的线程</strong>，从而实现<strong>多线程对共享资源的有序访问</strong>。</p>
 <h4 id="关键方法"><a href="#关键方法" class="headerlink" title="关键方法"></a>关键方法</h4><ol>
 <li><strong>状态管理方法</strong></li>
 </ol>
-<p><code>**tryAcquire(int arg)**</code><strong>：</strong>独占式尝试获取同步状态。需要子类实现，若成功返回 <code>true</code>，否则返回 <code>false</code>。</p>
-<p><code>**tryRelease(int arg)**</code><strong>：</strong>独占式释放同步状态。子类实现。成功返回 <code>true</code>否则 <code>false</code></p>
-<p><code>**tryAcquireShared(int args)**</code><strong>：</strong>共享式尝试获取同步状态。子类实现，返回值表示剩余可用资源，负数失败，0&#x2F;正数成功。</p>
-<p><code>**tryReleaseShared(int args)**</code><strong>：</strong>共享式释放状态。子类实现。</p>
+<p>**<code>tryAcquire(int arg)</code>**：独占式尝试获取同步状态。需要子类实现，若成功返回 <code>true</code>，否则返回 <code>false</code>。</p>
+<p>**<code>**tryRelease(int arg)</code><strong>：</strong>独占式释放同步状态。子类实现。成功返回 <code>true</code>否则 <code>false</code></p>
+<p>**<code>**tryAcquireShared(int args)</code><strong>：</strong>共享式尝试获取同步状态。子类实现，返回值表示剩余可用资源，负数失败，0&#x2F;正数成功。</p>
+<p>**<code>**tryReleaseShared(int args)</code><strong>：</strong>共享式释放状态。子类实现。</p>
 <ol start="2">
 <li><strong>模板方法</strong></li>
 </ol>
-<p><code>**acquire(int arg)**</code><strong>：</strong>独占式获取同步状态。调用 <code>tryAcquire</code>尝试获取，失败则将线程加入等待队列并<strong>自旋</strong>，直到前驱节点为头节点且成功获取资源。</p>
-<p><code>**release(int arg)**</code><strong>：</strong>独占式释放同步状态。调用 <code>tryRelease</code>释放后，唤醒后继节点的线程。</p>
-<p><code>**acquireShared(int arg)**</code><strong>：</strong>共享式获取同步状态。调用 <code>tryAcquiredShared</code>成功后，传播唤醒后续节点。</p>
-<p><code>**releaseShared(int arg)**</code><strong>：</strong>共享式释放同步状态。调用 <code>tryReleaseShared</code>后，唤醒后续等待的线程。</p>
+<p><strong><code>acquire(int arg)</code><strong>：独占式获取同步状态。调用 <code>tryAcquire</code>尝试获取，失败则将线程加入等待队列并</strong>自旋</strong>，直到前驱节点为头节点且成功获取资源。</p>
+<p>**<code>release(int arg)</code>**：独占式释放同步状态。调用 <code>tryRelease</code>释放后，唤醒后继节点的线程。</p>
+<p>**<code>acquireShared(int arg)</code>**：共享式获取同步状态。调用 <code>tryAcquiredShared</code>成功后，传播唤醒后续节点。</p>
+<p>**<code>releaseShared(int arg)</code>**：共享式释放同步状态。调用 <code>tryReleaseShared</code>后，唤醒后续等待的线程。</p>
 <ol start="3">
 <li><strong>条件队列管理</strong></li>
 </ol>
-<p><code>**newCondition()**</code><strong>：</strong>创建与 AQS 实例绑定的 <code>Condition</code>对象，用于实现线程等待&#x2F;通知机制（如 <code>await()</code>和 <code>signal()</code>）</p>
+<p>**<code>newCondition()</code>**：创建与 AQS 实例绑定的 <code>Condition</code>对象，用于实现线程等待&#x2F;通知机制（如 <code>await()</code>和 <code>signal()</code>）</p>
 <ol start="4">
 <li><strong>辅助方法</strong></li>
 </ol>
-<p><code>**isHeldExclusively()**</code><strong>：</strong>判断当前同步状态是否被独占（如 ReentranLock 中检测锁持有线程是否为当前线程）</p>
-<p><code>**acquireInterruptibly(int arg)**</code><strong>：</strong>可中断的获取同步状态。在自旋过程中若检测到线程中断，直接抛出异常并退出。</p>
+<p>**<code>isHeldExclusively()</code>**：判断当前同步状态是否被独占（如 ReentranLock 中检测锁持有线程是否为当前线程）</p>
+<p>**<code>acquireInterruptibly(int arg)</code>**：可中断的获取同步状态。在自旋过程中若检测到线程中断，直接抛出异常并退出。</p>
 <h4 id="核心设计原理"><a href="#核心设计原理" class="headerlink" title="核心设计原理"></a>核心设计原理</h4><ul>
-<li>**同步状态管理 **：通过 <code>**&gt;volatile int state**</code> 变量表示状态，依赖 CAS 操作保证原子性（如 <code>**&gt;compareAndSetState**</code>）<font style="background-color:rgb(224, 223, 255);"></li>
-<li>**队列同步 **：维护一个双向 FIFO 队列（CLH 队列变体），将未获取资源的线程封装为节点（Node）并阻塞，前驱节点释放后唤醒后继节点 <font style="background-color:rgb(224, 223, 255);"></li>
-<li>**子类扩展 **：子类通过实现 <code>**&gt;tryAcquire**</code>&#x2F;<code>**&gt;tryRelease**</code> 等方法定义同步逻辑，AQS 负责底层线程阻塞、唤醒及队列管理</li>
+<li>**同步状态管理 **：通过 <strong><code>volatile int state</code></strong> 变量表示状态，依赖 CAS 操作保证原子性（如 <code>**&gt;compareAndSetState**</code>）</li>
+<li>**队列同步 **：维护一个双向 FIFO 队列（CLH 队列变体），将未获取资源的线程封装为节点（Node）并阻塞，前驱节点释放后唤醒后继节点 </li>
+<li>**子类扩展 **：子类通过实现 <strong><code>tryAcquire/tryRelease</code></strong> 等方法定义同步逻辑，AQS 负责底层线程阻塞、唤醒及队列管理</li>
 </ul>
 <h4 id="典型使用场景"><a href="#典型使用场景" class="headerlink" title="典型使用场景"></a>典型使用场景</h4><ul>
-<li>**独占锁 **：如 <code>**&gt;ReentrantLock**</code>，通过 <code>**&gt;tryAcquire**</code> 和 <code>**&gt;tryRelease**</code> 实现可重入锁逻辑。</li>
-<li>**共享锁 **：如 <code>**&gt;Semaphore**</code> 和 <code>**&gt;CountDownLatch**</code>，通过 <code>**&gt;tryAcquireShared**</code> 和 <code>**&gt;tryReleaseShared**</code> 控制资源访问。</li>
-<li>**条件变量 **：结合 <code>**&gt;Condition**</code> 实现线程间的精确等待与通知</li>
+<li>**独占锁 **：如 **<code>ReentrantLock</code>**，通过 <strong><code>tryAcquire</code></strong> 和 <strong><code>tryRelease</code></strong> 实现可重入锁逻辑。</li>
+<li>**共享锁 **：如 <strong><code>Semaphore</code></strong> 和 **<code>CountDownLatch</code>**，通过 <strong><code>tryAcquireShared</code></strong> 和 <strong><code>tryReleaseShared</code></strong> 控制资源访问。</li>
+<li>**条件变量 **：结合 <strong><code>Condition</code></strong> 实现线程间的精确等待与通知</li>
 </ul>
 <h4 id="学习收获"><a href="#学习收获" class="headerlink" title="学习收获"></a>学习收获</h4><ol>
 <li>AQS 明显使用了<strong>模板方法</strong>的模式，在确定使用用途的时候，通过固定的代码框架可以避免代码的重复性。但是需要对后续实现功能有比较确切的了解才能使用，否则后续容易导致子类变更影响的扩散。</li>
@@ -273,8 +276,8 @@
 <p><strong>CLH 锁实现原理简单概述？</strong></p>
 <p>线程通过自旋检查前驱节点状态来决定是否获取锁。其核心原理是：</p>
 <ol>
-<li>**队列结构 **：线程竞争锁时，会以 FIFO（先进先出）顺序加入链表队列，每个节点仅需关注前驱节点 <font style="background-color:rgb(224, 223, 255);"></li>
-<li>**自旋机制 **：线程在未获取锁时持续自旋检查前驱节点的状态，当前驱节点释放锁后，当前线程才能尝试获取锁 <font style="background-color:rgb(224, 223, 255);"></li>
+<li>**队列结构 **：线程竞争锁时，会以 FIFO（先进先出）顺序加入链表队列，每个节点仅需关注前驱节点 </li>
+<li>**自旋机制 **：线程在未获取锁时持续自旋检查前驱节点的状态，当前驱节点释放锁后，当前线程才能尝试获取锁 </li>
 <li>**公平性 **：保证线程按申请顺序获取锁，避免饥饿问题</li>
 <li>**无锁化操作 **：通过 CAS 原子操作维护队列，减少锁竞争</li>
 </ol>
@@ -350,10 +353,10 @@
 <li><strong>线程协作</strong>：通过 <code>wait()</code> 和 <code>notify()</code> 在 Monitor 的 <code>_WaitSet</code> 和 <code>_EntryList</code> 之间转移线程，实现生产者-消费者等模式 。</li>
 </ul>
 <h3 id="ReentrantLock-的实现"><a href="#ReentrantLock-的实现" class="headerlink" title="ReentrantLock 的实现"></a>ReentrantLock 的实现</h3><ol>
-<li>**可重入性 **：同一个线程可以多次获取同一把锁，避免死锁。例如，一个线程在持有锁的情况下再次进入同步代码块时无需重新竞争锁 <font style="background-color:rgb(224, 223, 255);">。</li>
+<li>**可重入性 **：同一个线程可以多次获取同一把锁，避免死锁。例如，一个线程在持有锁的情况下再次进入同步代码块时无需重新竞争锁 。</li>
 <li>**支持公平与非公平模式 **：<ul>
 <li>**公平模式 **：线程按照请求锁的顺序获取锁，避免“插队”现象，但可能降低吞吐量。</li>
-<li>**非公平模式 **：允许线程“插队”获取锁（如刚释放锁的线程可能立即重新获取），提高性能但可能导致某些线程饥饿 <font style="background-color:rgb(224, 223, 255);">。</li>
+<li>**非公平模式 **：允许线程“插队”获取锁（如刚释放锁的线程可能立即重新获取），提高性能但可能导致某些线程饥饿 。</li>
 </ul>
 </li>
 <li>**灵活的锁控制 **：提供 <code>**&gt;tryLock()**</code>（尝试获取锁）、<code>**&gt;tryLock(long timeout, TimeUnit unit)**</code>（带超时的尝试获取锁）、<code>**&gt;lockInterruptibly()**</code>（可中断的锁获取）等方法，增强对锁行为的细粒度控制</li>
@@ -469,7 +472,7 @@
 </code></pre>
 <p>通过 <code>compareAndSetState(c, c + SHARED_UNIT)</code> 尝试原子更新 state。若 CAS 成功，记录当前线程的读锁重入次数（通过 HoldCounter 或 ThreadLocal 管理），并返回成功状态。</p>
 <ol start="3">
-<li><code>**tryReleaseShared**</code>** 方法**</li>
+<li><strong><code>tryReleaseShared**</code> 方法</strong></li>
 </ol>
 <p>该方法用于释放读锁，流程如下：</p>
 <ul>
@@ -479,7 +482,7 @@
 <li><strong>返回值</strong>：始终返回 <code>true</code>，表示共享锁释放完成 。</li>
 </ul>
 <ol start="4">
-<li><code>**tryReadLock**</code>** 方法**</li>
+<li><strong><code>tryReadLock</code> 方法</strong></li>
 </ol>
 <p>该方法用于非阻塞地尝试获取读锁（类似 <code>tryLock()</code>），流程如下：</p>
 <ul>
@@ -499,7 +502,7 @@
 <li>**公平性判断 **：在公平模式下，若等待队列中有其他线程等待，则当前线程需进入队列并阻塞。</li>
 </ul>
 <ol start="6">
-<li><code>**&gt;tryRelease**</code>** 方法（写锁的释放）**</li>
+<li><strong><code>tryRelease**</code> 方法（写锁的释放）</strong></li>
 </ol>
 <p>该方法用于释放写锁，流程如下：</p>
 <ul>
@@ -509,14 +512,14 @@
 <li>**唤醒等待线程 **：若写锁完全释放，调用 <code>**&gt;unparkSuccessor**</code> 唤醒 AQS 队列中等待的读锁或写锁线程 。</li>
 </ul>
 <ol start="7">
-<li><code>**&gt;tryWriteLock**</code>** 方法（非阻塞尝试获取写锁）**</li>
+<li><strong><code>tryWriteLock**</code> 方法（非阻塞尝试获取写锁）</strong></li>
 </ol>
-<p>该方法用于非阻塞地尝试获取写锁（类似 <code>**&gt;tryLock()**</code>），流程如下：</p>
+<p>该方法用于非阻塞地尝试获取写锁（类似 **<code>tryLock()</code>**），流程如下：</p>
 <ul>
 <li>**快速检查 **：若当前存在读锁或写锁（且持有者不是当前线程），直接返回失败。</li>
-<li>**CAS 尝试获取 **：尝试通过 <code>**&gt;compareAndSetState**</code> 原子设置 <code>**&gt;state**</code> 的低 16 位为 1（初始写锁计数）。若成功，设置当前线程为写锁持有者。</li>
-<li>**失败处理 **：若因竞争或锁占用导致 CAS 失败，立即返回 <code>**&gt;false**</code>，不进入等待队列。</li>
-<li>**与 <strong><code>**&gt;tryAcquire**</code></strong> 的对比 **：<code>**&gt;tryWriteLock**</code> 是轻量级的单次尝试，而 <code>**&gt;tryAcquire**</code> 可能涉及公平性判断和队列阻塞。</li>
+<li>**CAS 尝试获取 **：尝试通过 <code>compareAndSetState</code> 原子设置 <code>state</code> 的低 16 位为 1（初始写锁计数）。若成功，设置当前线程为写锁持有者。</li>
+<li>**失败处理 **：若因竞争或锁占用导致 CAS 失败，立即返回 <code>false</code>，不进入等待队列。</li>
+<li>**与 <code>tryAcquire**</code> 的对比 **：<code>tryWriteLock</code> 是轻量级的单次尝试，而 <code>tryAcquire</code> 可能涉及公平性判断和队列阻塞。</li>
 </ul>
 <h3 id="StampedLock-的实现"><a href="#StampedLock-的实现" class="headerlink" title="StampedLock 的实现****"></a>StampedLock 的实现****</h3><p>使用范例：如何实现一个线程安全的二维点（Point）类，支持并发读写操作，并体现 乐观读 和 锁升级 的典型场景</p>
 <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.StampedLock;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">Point</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="type">double</span> x;</span><br><span class="line">    <span class="keyword">private</span> <span class="type">double</span> y;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="type">StampedLock</span> <span class="variable">lock</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">StampedLock</span>();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 写锁：移动点到指定坐标</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">move</span><span class="params">(<span class="type">double</span> deltaX, <span class="type">double</span> deltaY)</span> &#123;</span><br><span class="line">        <span class="type">long</span> <span class="variable">stamp</span> <span class="operator">=</span> lock.writeLock();  <span class="comment">// 获取写锁</span></span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            x += deltaX;</span><br><span class="line">            y += deltaY;</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            lock.unlockWrite(stamp);  <span class="comment">// 释放写锁</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 乐观读：计算点到原点的距离</span></span><br><span class="line">    <span class="keyword">public</span> <span class="type">double</span> <span class="title function_">distanceToOrigin</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="type">long</span> <span class="variable">stamp</span> <span class="operator">=</span> lock.tryOptimisticRead();  <span class="comment">// 获取乐观读锁</span></span><br><span class="line">        <span class="type">double</span> <span class="variable">currentX</span> <span class="operator">=</span> x;</span><br><span class="line">        <span class="type">double</span> <span class="variable">currentY</span> <span class="operator">=</span> y;</span><br><span class="line">        <span class="comment">// 验证乐观读期间是否有写操作</span></span><br><span class="line">        <span class="keyword">if</span> (!lock.validate(stamp)) &#123;</span><br><span class="line">            <span class="comment">// 若有写操作，升级为悲观读锁</span></span><br><span class="line">            stamp = lock.readLock();</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                currentX = x;</span><br><span class="line">                currentY = y;</span><br><span class="line">            &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">                lock.unlockRead(stamp);  <span class="comment">// 释放悲观读锁</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> Math.sqrt(currentX * currentX + currentY * currentY);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 锁升级：如果点在原点，则移动到指定坐标</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">moveIfAtOrigin</span><span class="params">(<span class="type">double</span> newX, <span class="type">double</span> newY)</span> &#123;</span><br><span class="line">        <span class="type">long</span> <span class="variable">stamp</span> <span class="operator">=</span> lock.tryOptimisticRead();  <span class="comment">// 尝试乐观读</span></span><br><span class="line">        <span class="type">double</span> <span class="variable">currentX</span> <span class="operator">=</span> x;</span><br><span class="line">        <span class="type">double</span> <span class="variable">currentY</span> <span class="operator">=</span> y;</span><br><span class="line">        <span class="keyword">if</span> (currentX == <span class="number">0</span> &amp;&amp; currentY == <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="comment">// 需要升级为写锁</span></span><br><span class="line">            <span class="type">long</span> <span class="variable">writeStamp</span> <span class="operator">=</span> lock.convertToWriteLock(stamp);  <span class="comment">// 升级为写锁</span></span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="comment">// 二次检查避免其他线程已修改</span></span><br><span class="line">                <span class="keyword">if</span> (x == <span class="number">0</span> &amp;&amp; y == <span class="number">0</span>) &#123;</span><br><span class="line">                    x = newX;</span><br><span class="line">                    y = newY;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">                lock.unlockWrite(writeStamp);  <span class="comment">// 释放写锁</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 获取当前坐标（用于测试）</span></span><br><span class="line">    <span class="keyword">public</span> String <span class="title function_">getCurrentPosition</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="type">long</span> <span class="variable">stamp</span> <span class="operator">=</span> lock.readLock();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="string">&quot;Point(&quot;</span> + x + <span class="string">&quot;, &quot;</span> + y + <span class="string">&quot;)&quot;</span>;</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            lock.unlockRead(stamp);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
