@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha256-yIDrPSXHZdOZhAqiBP7CKzIwMQmRCJ8UeB8Jo17YC4o=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Muse","darkmode":false,"version":"8.19.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="线程线程使用方式通常是继承Thread类或实现 Runnable接口的方式来创建使用的。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Java并发基础-线程">
+<meta property="og:url" content="http://example.com/2025/06/03/Java%E5%B9%B6%E5%8F%91%E5%9F%BA%E7%A1%80-%E7%BA%BF%E7%A8%8B/index.html">
+<meta property="og:site_name" content="村里最好的博客">
+<meta property="og:description" content="线程线程使用方式通常是继承Thread类或实现 Runnable接口的方式来创建使用的。">
+<meta property="og:locale">
+<meta property="og:image" content="http://example.com/images/java/thread-1.png">
+<meta property="og:image" content="http://example.com/images/java/thread-2.png">
+<meta property="article:published_time" content="2025-06-03T03:23:00.000Z">
+<meta property="article:modified_time" content="2025-06-03T05:46:18.074Z">
+<meta property="article:author" content="刘冰鉴">
+<meta property="article:tag" content="Java">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/images/java/thread-1.png">
+
+
+<link rel="canonical" href="http://example.com/2025/06/03/Java%E5%B9%B6%E5%8F%91%E5%9F%BA%E7%A1%80-%E7%BA%BF%E7%A8%8B/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-Hans","comments":true,"permalink":"http://example.com/2025/06/03/Java%E5%B9%B6%E5%8F%91%E5%9F%BA%E7%A1%80-%E7%BA%BF%E7%A8%8B/","path":"2025/06/03/Java并发基础-线程/","title":"Java并发基础-线程"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Java并发基础-线程 | 村里最好的博客</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">村里最好的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="Search" role="button">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
+</nav>
+
+
+
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BA%BF%E7%A8%8B"><span class="nav-number">1.</span> <span class="nav-text">线程</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BA%BF%E7%A8%8B%E7%9A%84%E7%8A%B6%E6%80%81%E4%B8%8E%E6%B5%81%E8%BD%AC%E6%96%B9%E5%BC%8F"><span class="nav-number">1.1.</span> <span class="nav-text">线程的状态与流转方式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%AD%E6%96%AD%E7%BA%BF%E7%A8%8B"><span class="nav-number">1.2.</span> <span class="nav-text">中断线程</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#stop-%E6%96%B9%E6%B3%95%E8%A1%8C%E4%B8%BA"><span class="nav-number">1.2.1.</span> <span class="nav-text">stop()方法行为</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#interrupt-%E6%96%B9%E6%B3%95%E8%A1%8C%E4%B8%BA"><span class="nav-number">1.2.2.</span> <span class="nav-text">interrupt() 方法行为</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BA%BF%E7%A8%8B%E5%BC%80%E9%94%80"><span class="nav-number">1.3.</span> <span class="nav-text">线程开销</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%86%85%E5%AD%98%E6%B6%88%E8%80%97"><span class="nav-number">1.3.1.</span> <span class="nav-text">内存消耗</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E4%B8%8A%E4%B8%8B%E6%96%87%E5%88%87%E6%8D%A2"><span class="nav-number">1.3.2.</span> <span class="nav-text">上下文切换</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%AD%BB%E9%94%81%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D"><span class="nav-number">1.4.</span> <span class="nav-text">死锁问题定位</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#CPU-%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D%E5%AE%9A%E4%BD%8D"><span class="nav-number">1.5.</span> <span class="nav-text">CPU 问题定位定位</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BA%BF%E7%A8%8B%E6%B1%A0%E7%9A%84%E4%BD%BF%E7%94%A8%E4%B8%8E%E5%8F%82%E6%95%B0%E8%AF%B4%E6%98%8E"><span class="nav-number">1.6.</span> <span class="nav-text">线程池的使用与参数说明</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BA%BF%E7%A8%8B%E6%B1%A0%E7%9A%84%E5%8E%9F%E7%90%86"><span class="nav-number">1.7.</span> <span class="nav-text">线程池的原理</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">刘冰鉴</p>
+  <div class="site-description" itemprop="description">Res severa est verum gaudium.</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">31</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2025/06/03/Java%E5%B9%B6%E5%8F%91%E5%9F%BA%E7%A1%80-%E7%BA%BF%E7%A8%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="刘冰鉴">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="村里最好的博客">
+      <meta itemprop="description" content="Res severa est verum gaudium.">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Java并发基础-线程 | 村里最好的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Java并发基础-线程
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2025-06-03 11:23:00 / Modified: 13:46:18" itemprop="dateCreated datePublished" datetime="2025-06-03T11:23:00+08:00">2025-06-03</time>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h2 id="线程"><a href="#线程" class="headerlink" title="线程"></a>线程</h2><p>线程使用方式通常是继承<code>Thread</code>类或实现 <code>Runnable</code>接口的方式来创建使用的。</p>
+<span id="more"></span>
+
+<h3 id="线程的状态与流转方式"><a href="#线程的状态与流转方式" class="headerlink" title="线程的状态与流转方式"></a>线程的状态与流转方式</h3><p>Java 线程共有 6 种状态 ：</p>
+<p>**NEW（新建） **：线程对象已创建但未调用 start()。</p>
+<p><strong>RUNNABLE（运行&#x2F;就绪）</strong> ：线程正在运行或等待 CPU 调度。</p>
+<p>**BLOCKED（阻塞） **：线程因等待锁（如 synchronized）进入阻塞状态 。</p>
+<p><strong>WAITING（无限等待）</strong> ：线程调用 wait()、join() 等方法进入等待状态，需其他线程显式唤醒 。</p>
+<p><strong>TIMED_WAITING（定时等待）</strong> ：线程调用 sleep(long)、wait(long) 等方法进入定时等待 。</p>
+<p><strong>TERMINATED（终止）</strong> ：线程任务执行完毕或抛出异常结束 。</p>
+<p><img src="/images/java/thread-1.png"></p>
+<h3 id="中断线程"><a href="#中断线程" class="headerlink" title="中断线程"></a>中断线程</h3><h4 id="stop-方法行为"><a href="#stop-方法行为" class="headerlink" title="stop()方法行为"></a><code>stop()</code>方法行为</h4><ul>
+<li>立即抛出ThreadDeath异常，在run()方法中任何一个执行指令都可能抛出ThreadDeath异常。</li>
+<li>会释放当前线程所持有的所有的锁，这种锁的释放是不可控的。可能使得原本原子性的操作不具备原子性了。</li>
+</ul>
+<p><strong>所以 stop 方法并不是一个推荐的行为。</strong></p>
+<h4 id="interrupt-方法行为"><a href="#interrupt-方法行为" class="headerlink" title="interrupt() 方法行为"></a>interrupt() 方法行为</h4><p><code>interrupt()</code> 并不会直接强制终止线程，而是通过设置线程的<strong>中断状态（isInterrupted）为 true</strong>，向目标线程发送中断请求。<strong>若线程处于阻塞状态</strong>（如调用 sleep()、wait()、join() 等方法），<strong>则会抛出 InterruptedException</strong>，从而唤醒线程。</p>
+<ul>
+<li><strong>阻塞场景 ：</strong>interrupt() 能有效中断线程的阻塞状态（如等待、睡眠），这是其主要设计目的 。</li>
+<li><strong>非阻塞场景 ：</strong>若线程未被阻塞，interrupt() 仅设置中断标志，需线程主动通过 isInterrupted() 或 Thread.interrupted() 检测该标志并退出运行逻辑。例如，在循环中定期检查中断状态 </li>
+<li><strong>无法中断 I&#x2F;O 阻塞 ：</strong>对于某些 I&#x2F;O 阻塞（如 InputStream.read()），interrupt() 可能无效，需结合其他机制处理 。</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 循环检测</span></span><br><span class="line"><span class="keyword">while</span> (!Thread.currentThread().isInterrupted()) &#123;</span><br><span class="line">    <span class="comment">// 执行任务</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 阻塞时捕获异常</span></span><br><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    Thread.sleep(<span class="number">1000</span>);</span><br><span class="line">&#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">    Thread.currentThread().interrupt(); <span class="comment">// 重新设置中断标志</span></span><br><span class="line">    <span class="comment">// 处理中断逻辑</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在 JVM 源码层面，<strong>interrupt() 通过本地方法（Native Method）修改线程状态</strong>，并触发对阻塞操作的中断检查。</p>
+<h3 id="线程开销"><a href="#线程开销" class="headerlink" title="线程开销"></a>线程开销</h3><h4 id="内存消耗"><a href="#内存消耗" class="headerlink" title="内存消耗"></a>内存消耗</h4><p>主要由线程栈和线程本地存储（Thread Local Storage）组成，具体消耗取决于 JVM 配置及线程状态：</p>
+<p><strong>线程栈内存</strong></p>
+<p>默认情况下，Java 线程栈的大小由 JVM 参数 <strong>-Xss 控制</strong>。在 JDK 1.4 中，默认值为 256KB ，而现代 JVM（如 Java 8）中默认值可能为 1MB 。通过 -Xss 可显式调整此值，例如 -Xss512k 表示每个线程栈占用 512KB 虚拟内存。需要注意的是，线程栈分配的是虚拟内存 ，实际物理内存（提交内存）按需分配，例如空闲线程栈可能仅占用约 10~20KB 的物理内存 。</p>
+<p><strong>线程本地存储（TLS）</strong></p>
+<p>线程本地存储用于保存线程私有数据（如 ThreadLocal 变量），<strong>其内存消耗取决于具体存储的数据量</strong>。这部分内存独立于线程栈，直接占用堆外内存或堆内存 。</p>
+<p><strong>实际内存占用示例</strong></p>
+<p>若线程栈默认为 1MB，1000 个线程理论上需约 1GB 虚拟内存，但实际物理内存可能远小于该值（如实验中观察到 1000 个空线程仅占用约 10MB 物理内存）。</p>
+<p>对于活跃线程较多的场景（如 14,000 个线程），声明的栈内存总和可能高达 14GB 以上，但实际提交的物理内存约为 13.71GB，说明虚拟内存与物理内存的使用存在差异 。</p>
+<p><strong>影响因素</strong></p>
+<ul>
+<li>**线程阻塞状态 **：阻塞线程可能因未使用完整栈空间而减少物理内存占用。</li>
+<li><strong>JVM 参数优化</strong> ：减小 -Xss 值（如设为 256KB）可显著降低线程栈内存消耗 。</li>
+<li>**并发模型 **：大量线程（如 100 万）可能导致内存占用激增（约 250MB 以上），需结合异步&#x2F;协程模型优化</li>
+</ul>
+<h4 id="上下文切换"><a href="#上下文切换" class="headerlink" title="上下文切换"></a>上下文切换</h4><p>在多任务操作系统中，为了提高CPU的利用率，可以<strong>让当前系统运行远多于CPU核数的线程</strong>。但是由于同时运行的线程数是由CPU核数来决定的，所以为了支持更多线程运行，<strong>CPU会把自己的时间片轮流分配给其他线程，这个过程就是上下文切换。</strong></p>
+<p>导致线程上下文切换的原因总结如下</p>
+<ul>
+<li>多个任务抢占synchronized同步锁资源</li>
+<li>在线程运行过程中存在I&#x2F;O阻塞，CPU调度器会切换CPU时间片</li>
+<li>在线程中通过主动阻塞当前线程的方法释放CPU时间片</li>
+<li>当前线程执行完成后释放CPU时间片，CPU重新调度</li>
+</ul>
+<p>线程上下文切换需要注意两点</p>
+<ul>
+<li>当两个线程切换属于不同的进程时，由于进程资源不共享，所以线程的切换其实就是进程的切换</li>
+<li>当两个线程属于同一个进程时，只需要保存线程的上下文</li>
+</ul>
+<p>线程的上下文切换，需要保存上一个线程的私有数据、寄存器等数据，这个过程同样会占用CPU资源，<strong>当上下文切换过于频繁时，会使得CPU不断进行切换，无法真正去做计算，最终导致性能下降。</strong></p>
+<hr>
+<p><strong>如何减少上下文切换呢？</strong></p>
+<ul>
+<li><strong>减少线程数</strong>，同一时刻能够运行的线程数是由CPU核数决定的，创建过多的线程，就会造成CPU时间片的频繁切换</li>
+<li><strong>采用无锁设计解决线程竞争问题</strong>，比如在同步锁场景中，如果存在多线程竞争，那么没抢到锁的线程会被阻塞，这个过程涉及系统调用，而系统调用会产生从用户态到内核态的切换，这个切换过程需要保存上下文信息对性能的影响。如果采用无锁设计就能够解决这类问题</li>
+<li><strong>采用CAS做自旋操作</strong>，它是一种无锁化编程思想，原理是通过循环重试的方式避免线程的阻塞导致的上下文切换。</li>
+</ul>
+<h3 id="死锁问题定位"><a href="#死锁问题定位" class="headerlink" title="死锁问题定位"></a>死锁问题定位</h3><p>对于死锁问题的排查，具体操作步骤如下：</p>
+<ol>
+<li>通过 jps 命令，查看Java进程的pid</li>
+<li>通过 <code>jstack &lt;pid&gt;</code> 命令查看线程 dump 日志。当发现死锁时，可以在打印的dump日志中找到 <code>Found oneJava-level deadlock:</code>信息，根据信息的内容分析问题出现的</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">DeadlockExample</span> &#123;</span><br><span class="line">    <span class="comment">// 定义两个锁对象</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">Object</span> <span class="variable">lockA</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Object</span>();</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">Object</span> <span class="variable">lockB</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Object</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        <span class="comment">// 线程1：先获取lockA，再尝试获取lockB</span></span><br><span class="line">        <span class="type">Thread</span> <span class="variable">thread1</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Thread</span>(() -&gt; &#123;</span><br><span class="line">            <span class="keyword">synchronized</span> (lockA) &#123;</span><br><span class="line">                System.out.println(<span class="string">&quot;Thread 1 holds lockA&quot;</span>);</span><br><span class="line">                <span class="keyword">try</span> &#123; Thread.sleep(<span class="number">100</span>); &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;&#125;</span><br><span class="line">                <span class="keyword">synchronized</span> (lockB) &#123;</span><br><span class="line">                    System.out.println(<span class="string">&quot;Thread 1 holds lockB&quot;</span>);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 线程2：先获取lockB，再尝试获取lockA</span></span><br><span class="line">        <span class="type">Thread</span> <span class="variable">thread2</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Thread</span>(() -&gt; &#123;</span><br><span class="line">            <span class="keyword">synchronized</span> (lockB) &#123;</span><br><span class="line">                System.out.println(<span class="string">&quot;Thread 2 holds lockB&quot;</span>);</span><br><span class="line">                <span class="keyword">try</span> &#123; Thread.sleep(<span class="number">100</span>); &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;&#125;</span><br><span class="line">                <span class="keyword">synchronized</span> (lockA) &#123;</span><br><span class="line">                    System.out.println(<span class="string">&quot;Thread 2 holds lockA&quot;</span>);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 启动两个线程</span></span><br><span class="line">        thread1.start();</span><br><span class="line">        thread2.start();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>程序行为分析：</strong></p>
+<ul>
+<li>线程1先获取lockA，随后尝试获取lockB；</li>
+<li>线程2先获取lockB，随后尝试获取lockA；</li>
+<li>当两个线程同时执行到各自的第二个synchronized块时，会出现以下情况：<ul>
+<li>线程1持有lockA，等待lockB释放；</li>
+<li>线程2持有lockB，等待lockA释放；</li>
+</ul>
+</li>
+</ul>
+<p>双方进入永久等待状态，无法继续执行。</p>
+<p><strong>死锁原因：</strong></p>
+<ul>
+<li>资源互斥 ：锁对象（lockA&#x2F;lockB）被一个线程独占；</li>
+<li>持有并等待 ：线程在等待其他锁时未释放已持有锁；</li>
+<li>不可抢占 ：锁只能由持有线程主动释放；</li>
+<li>循环等待 ：线程间形成环形依赖链</li>
+</ul>
+<h3 id="CPU-问题定位定位"><a href="#CPU-问题定位定位" class="headerlink" title="CPU 问题定位定位"></a>CPU 问题定位定位</h3><ol>
+<li><strong>定位高 CPU 占用的 Java 进程</strong></li>
+</ol>
+<ul>
+<li>使用 <code>top</code> 命令查看系统中 CPU 占用最高的进程：</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">top</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>按 <code>P</code> 键按 CPU 使用率排序，找到目标 Java 进程的 PID（进程 ID）。</li>
+</ul>
+<ol start="2">
+<li><strong>查看进程内线程的 CPU 占用情况</strong></li>
+</ol>
+<ul>
+<li>使用 <code>top -Hp &lt;PID&gt;</code> 查看该进程中所有线程的 CPU 占用情况：</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">top -Hp &lt;PID&gt;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>找到占用 CPU 最高的线程 ID（TID）。</li>
+</ul>
+<ol start="3">
+<li><strong>转换线程 ID 为 16 进制</strong></li>
+</ol>
+<ul>
+<li>将线程 ID（TID）转换为 16 进制格式（用于后续与线程堆栈匹配）：</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">printf</span> <span class="string">&quot;%x\n&quot;</span> &lt;TID&gt;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>例如，若 TID 为 <code>1234</code>，转换后为 <code>4d2</code> 。</li>
+</ul>
+<ol start="4">
+<li><strong>导出线程堆栈并分析</strong></li>
+</ol>
+<ul>
+<li>使用 <code>jstack</code> 导出 Java 进程的线程堆栈：</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jstack &lt;PID&gt; &gt; thread_dump.txt</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>在 <code>thread_dump.txt</code> 中搜索 16 进制的线程 ID（如 <code>4d2</code>），找到对应的线程堆栈信息，分析其当前状态和调用栈 。</li>
+</ul>
+<ol start="5">
+<li><strong>使用 Arthas 快速定位（可选）</strong></li>
+</ol>
+<ul>
+<li>阿里开源的 Arthas 工具提供了更高效的分析方式：<ol>
+<li>启动 Arthas 并附加到目标进程：</li>
+</ol>
+</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">java -jar arthas-boot.jar &lt;PID&gt;</span><br></pre></td></tr></table></figure>
+
+<pre><code>2. 输入 `thread` 命令，自动列出 CPU 使用率最高的线程及其调用栈 。
+</code></pre>
+<ol start="6">
+<li><strong>常见问题场景</strong></li>
+</ol>
+<ul>
+<li><strong>死循环或频繁 GC</strong>：线程堆栈中可能显示循环调用或 <code>GC</code> 相关操作 。</li>
+<li><strong>锁竞争</strong>：线程可能卡在 <code>BLOCKED</code> 状态，等待某个锁 。</li>
+<li><strong>I&#x2F;O 或网络阻塞</strong>：线程可能长时间处于 <code>WAITING</code> 状态 。</li>
+</ul>
+<ol start="7">
+<li><strong>进一步排查</strong></li>
+</ol>
+<ul>
+<li>如果线程堆栈无法直接定位问题，可通过以下方式深入分析：<ul>
+<li>使用 <code>jstat</code> 检查 GC 频率和耗时 。</li>
+<li>使用 <code>jmap</code> 导出堆内存快照分析内存泄漏 。</li>
+<li>结合代码日志定位高频操作或异常逻辑 。</li>
+</ul>
+</li>
+</ul>
+<p>通过上述步骤，可以快速定位 Java 程序中导致 CPU 过高的具体线程及代码逻辑 。</p>
+<h3 id="线程池的使用与参数说明"><a href="#线程池的使用与参数说明" class="headerlink" title="线程池的使用与参数说明"></a>线程池的使用与参数说明</h3><p>线程池是为了解决需要<strong>重复创建线程</strong>以执行某个任务，但是<strong>任务执行时间通常不长</strong>而产生的。比如 HTTP 请求的处理。</p>
+<p>线程池实际上运用的是一种<strong>池化技术</strong>，所谓池化技术就是提前创建好大量的“资源”保存在某个容器中，在需要使用时，可以直接从该容器中获取对应的资源进行处理，用完之后回收以便下次继续使用。</p>
+<p>在Java.Util.Concurrent包中，专门提供了与线程池有关的API，我们可以通过两种方式来创建线程池。</p>
+<ul>
+<li>ThreadPoolExecutor，线程池的具体实现类。</li>
+<li>Executors，提供了一系列工厂方法，用来创建不同类型的线程池，返回的线程池类型为ExecutorService接口。</li>
+</ul>
+<p><strong>ThreadPoolExecutor 的参数</strong></p>
+<ol>
+<li><code>corePoolSize</code><strong>（核心线程数）</strong><br>线程池中始终保留的线程数量，即使这些线程处于空闲状态也不会被回收。<br><em>示例：设置核心线程数为 5，表示线程池至少保持 5 个线程可用</em> 。</li>
+<li><code>maximumPoolSize</code><strong>（最大线程数）</strong><br>线程池允许创建的最大线程数。当任务队列已满且当前线程数小于 <code>maximumPoolSize</code> 时，线程池会创建新线程处理任务。<br><em>注意：若 <em><code>maximumPoolSize</code></em> 与 <em><code>corePoolSize</code></em> 相等，则线程池大小固定</em> 。</li>
+<li><code>keepAliveTime</code><strong>（空闲线程存活时间）</strong><br>非核心线程（即超过 <code>corePoolSize</code> 的线程）在空闲状态下的存活时间。超过该时间未执行任务的非核心线程会被终止并释放资源。<br><em>单位通过 <em><code>unit</code></em> 参数指定（如秒、毫秒）</em> 。</li>
+<li><code>workQueue</code><strong>（工作队列）</strong><br>存储等待执行的任务的阻塞队列。常见的实现类包括 <code>LinkedBlockingQueue</code>（无界队列）、<code>ArrayBlockingQueue</code>（有界队列）等。<br><em>队列容量需根据任务负载合理设置，避免内存溢出或任务拒绝</em> 。</li>
+<li><code>threadFactory</code><strong>（线程工厂）</strong><br>用于创建新线程的工厂类，通常用于设置线程名称、优先级等属性。<br><em>建议自定义线程工厂为线程池命名，便于调试和日志追踪</em> 。</li>
+<li><code>handler</code><strong>（拒绝策略）</strong><br>当线程池无法处理新任务（如队列已满且线程数达到 <code>maximumPoolSize</code>）时的处理策略。常见策略包括：  <ul>
+<li><code>AbortPolicy</code>（抛出异常，默认）  </li>
+<li><code>CallerRunsPolicy</code>（由调用线程自行处理）<br><em>需根据业务需求选择合适的拒绝策略</em> 。</li>
+</ul>
+</li>
+</ol>
+<p><strong>最佳实践与注意事项</strong></p>
+<ol>
+<li><strong>合理配置参数</strong>  <ul>
+<li>根据任务类型（CPU 密集型、I&#x2F;O 密集型）调整线程数。例如，CPU 密集型任务建议 <code>corePoolSize = CPU 核心数</code>，I&#x2F;O 密集型任务可适当增大线程数 。  </li>
+<li>避免将 <code>workQueue</code> 设置为无界队列（如 <code>LinkedBlockingQueue</code> 无容量限制），可能导致内存溢出 。</li>
+</ul>
+</li>
+<li><strong>区分业务场景</strong>  <ul>
+<li>不同类别的业务（如异步日志、定时任务）应使用不同的线程池，避免资源竞争和相互影响 。</li>
+</ul>
+</li>
+<li><strong>监控运行状态</strong>  <ul>
+<li>定期检查线程池的活跃线程数、队列大小等指标，及时调整参数以优化性能 。</li>
+</ul>
+</li>
+<li><strong>资源释放</strong>  <ul>
+<li>使用完线程池后需调用 <code>shutdown()</code> 或 <code>shutdownNow()</code> 关闭线程池，避免资源泄漏 。</li>
+</ul>
+</li>
+</ol>
+<h3 id="线程池的原理"><a href="#线程池的原理" class="headerlink" title="线程池的原理"></a>线程池的原理</h3><p><img src="/images/java/thread-2.png"></p>
+<p>ThreadPoolExecutor线程池的具体实现流程如下：</p>
+<ul>
+<li>调用 <code>execute(Runnable command)</code>往线程池中提交一个任务后，线程池首先会判断核心线程<strong>是否已经初始化</strong>（因为线程池默认是被动初始化的，当然在创建线程池的时候可以完成核心线程的初始化，可以通过ThreadPoolExecutor类的构造方法中提供的prestartCoreThread()方法完成），如果核心线程没有初始化，则创建一个工作线程并启动，这个线程启动后会从阻塞队列中获取任务并执行。</li>
+<li>把 command 任务通过 <code>offer()</code>方法添加到线程池的阻塞队列 <code>workQueue</code>中。</li>
+<li>如果<strong>队列满了</strong>，则尝试创建<strong>非核心工作线程并启动</strong>，这些非核心工作线程也会从阻塞队列workQueue中获取任务并执行，相当于提升了线程池的处理能力。</li>
+<li>如果线程池中总的工作线程数达到阈值，则执行拒绝策略。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Java/" rel="tag"># Java</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2025/05/25/Java%E5%B9%B6%E5%8F%91%E5%9F%BA%E7%A1%80-%E9%94%81/" rel="prev" title="Java并发基础-锁">
+                  <i class="fa fa-angle-left"></i> Java并发基础-锁
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2025/06/03/Java%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/" rel="next" title="Java网络编程-基础">
+                  Java网络编程-基础 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">刘冰鉴</span>
+  </div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/muse/" rel="noopener" target="_blank">NexT.Muse</a>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="Back to top">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/schemes/muse.js"></script><script src="/js/next-boot.js"></script>
+
+  
+
+
+
+
+
+
+  
+
+
+
+
+
+</body>
+</html>
